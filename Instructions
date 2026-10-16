@@ -1,0 +1,235 @@
+The Discovery Box — Public Storefront & AI Gift Builder
+Project scope, product plan, and deployment brief
+Document purpose: Define the customer-facing website for The Discovery Box, aligned with the existing internal business management app and brand assets.
+Status: Proposed implementation plan. Features described as “planned” are not assumed to exist until developed and tested.
+1. Executive summary
+Create one modern, responsive public website that combines:
+1. A playful premium storefront where customers discover The Discovery Box, browse approved products and collections, and explore gift inspiration.
+2. An AI-assisted Custom Gift Builder where customers describe a person, occasion, budget, style, and preferences, then receive gift concepts and a visual mock-up.
+3. A 3D-preview experience, introduced as a staged capability. AI can help generate concepts and visual assets, while a real interactive 3D product configurator may require structured 3D models and a separate rendering workflow.
+The website should feel joyful, colorful, polished, and trustworthy. It should follow the supplied Discovery Box logo and palette: deep navy, turquoise/mint, coral pink, warm yellow, and supporting playful accents. The six “Discovery Friends” mascots—Mochi, Luna, Panda, Sunny, Fox, and Milo—can guide visitors, explain features, provide gift suggestions, and add personality without overwhelming the shopping experience.
+The website will be hosted from a GitHub repository and deployed on Render. It will use the existing Supabase project/database for approved public catalogue reads. The public website must not receive or use the management app's secret/service-role key.
+2. Objectives
+- Present The Discovery Box as a distinctive personalized-gifting brand.
+- Make products and collections easy to explore on mobile and desktop.
+- Help customers discover gift ideas even when they do not know what to buy.
+- Let customers build a gift concept with guided choices and optional AI assistance.
+- Show product and gift-box previews before a customer submits an enquiry.
+- Generate qualified quotation requests for personalized or bulk orders.
+- Reuse the existing product catalogue where practical, avoiding duplicate catalogue maintenance.
+- Keep private management data protected.
+- Make the website accessible, fast, searchable, and straightforward to maintain.
+3. In-scope website experience
+3.1 Public pages
+- Home: brand introduction, featured collections, popular gift ideas, seasonal highlights, and calls to action.
+- Shop / Catalogue: browse public, active products and collections.
+- Collection pages: categories such as PLAY, HOME, and BUSINESS, plus approved collections configured in the management app.
+- Product detail: images, description, public price if approved for display, options, personalization information, and “Build a gift” / “Request a quote” actions.
+- Custom Gift Builder: guided, multi-step gift creation.
+- AI Gift Ideas: optional natural-language prompt to suggest gift concepts.
+- Corporate Gifts: a focused page for companies, events, employee gifts, client appreciation, and bulk enquiries.
+- About The Discovery Box: brand story and the Discovery Friends.
+- Contact: contact details and a WhatsApp enquiry link, if the business supplies the correct contact URL.
+- Privacy and terms: published policies approved by the company.
+3.2 Catalogue behavior
+The website should read the existing catalogue from Supabase, including active/public products, collections, images, and only the fields approved for public display.
+Requirements:
+- Use the existing catalogue as the source of truth where the current schema supports it.
+- Never expose internal costs, supplier details, stock notes, draft products, inactive products, or staff-only fields.
+- Only show prices where the company has deliberately marked them as public and current.
+- Support collection covers and product image crops already saved in the catalogue.
+- Provide graceful empty/loading/error states if the catalogue is unavailable.
+- Do not invent products, images, prices, stock levels, delivery promises, or customization options.
+The current README says public/anonymous database access is limited to catalogue reads. Verify the actual Supabase Row Level Security (RLS) policies and public fields before launch. Do not broaden public permissions to make the website easier to build.
+4. Custom Gift Builder
+The Gift Builder is the main interactive feature. It should feel like a friendly guided experience, not a long technical form.
+4.1 Suggested customer journey
+1. Choose the occasion: birthday, anniversary, thank-you, new baby, celebration, corporate event, or “something else.”
+2. Choose the recipient: friend, partner, child, family member, colleague, client, or another recipient.
+3. Set a budget: use company-approved ranges or allow the customer to enter a target budget.
+4. Choose preferences: interests, colors, style, product types, and any dislikes.
+5. Choose gift packaging: box style, message card, ribbon, and other options only if the business supports them.
+6. Add a message: optional message for the recipient.
+7. Review the concept: show selected catalogue items and a visual mock-up.
+8. Refine with AI: allow the customer to ask for changes, such as “make it more colorful,” “suitable for a teacher,” or “stay within this budget.”
+9. Submit an enquiry: collect only the contact and delivery details needed for a response and present the concept to the company for confirmation.
+4.2 AI capabilities
+The AI assistant may:
+- Turn a customer’s description into structured gift preferences.
+- Suggest combinations from the approved public catalogue.
+- Explain why a gift concept matches the occasion, recipient, and budget.
+- Offer alternative combinations.
+- Draft a gift-card message if requested.
+- Summarize the final concept for the quotation team.
+- Help translate the experience between English and Portuguese if this is included in the build.
+AI must not invent actual catalogue products, guarantee availability, set binding prices, promise delivery dates, or claim that an image is an exact representation of the final physical gift. Show a clear note that generated images are illustrative concepts and the final contents, personalization, price, and delivery are confirmed by The Discovery Box.
+4.3 AI image and 3D preview: separate the capabilities
+Stage A — AI concept images (recommended first):
+- Generate a polished illustrative image of a proposed gift arrangement from the customer's approved selections and description.
+- Show the selected products separately so the image is not mistaken for a verified product photograph.
+- Include “Illustrative AI concept” labeling.
+- Add retry and edit-prompt controls, subject to rate limits and moderation.
+Stage B — interactive 3D configurator (optional later phase):
+- Use actual 3D models for the box and supported products, with configurable colors, placement, and rotation.
+- A true interactive 3D preview generally needs structured 3D assets (for example, GLB/glTF), product dimensions, and a defined placement system.
+- An AI-generated 2D image alone is not a true manipulable 3D model.
+- Begin with a limited set of well-modeled boxes/products before expanding.
+AI image generation and interactive 3D rendering are distinct technical features and should be estimated separately. Select a provider after checking pricing, API access, data handling, latency, and licensing. Do not assume the existing internal app's AI credentials can be exposed to the browser.
+5. Discovery Friends mascots
+Use the supplied character sheet and logo as the visual reference. Preserve each mascot's identity and style rather than casually redesigning them.
+Mascot	Suggested website role
+Mochi — Imagination	Introduces creative gifts and playful ideas.
+Luna — Curiosity	Helps visitors explore collections and discover options.
+Panda — Reasoning	Helps compare choices and keep to a selected budget.
+Sunny — Creativity	Suggests colors, themes, and fun combinations.
+Fox — Discovery	Guides users through the Gift Builder.
+Milo — Innovation	Introduces AI concepts and new personalization features.
+
+
+These are proposed interface roles based on the supplied mascot descriptions. The mascots can appear in small helper cards, onboarding, empty states, tooltips, gift inspiration, and loading messages. Avoid placing a mascot on every section or making animations slow down the site. Provide reduced-motion behavior and meaningful text alternatives.
+Asset preparation: use transparent, high-resolution mascot images where available. Confirm the company has the rights to use the images on the website and in generated promotional material. Do not rely on text embedded in the mascot reference image as live website copy.
+6. Visual and UX direction
+Brand character
+- Playful, warm, imaginative, thoughtful, and premium.
+- Bright accents balanced with clean space and readable typography.
+- Rounded cards and buttons, soft shadows, friendly icons, and expressive product photography.
+- Use the logo and the supplied mascot sheet as brand references.
+Suggested palette
+These are approximate design tokens to be tuned against the original logo asset:
+- Deep navy: #102B56
+- Turquoise: #27C6BE
+- Mint: #8DE5D8
+- Coral: #FF6F78
+- Sunshine yellow: #FFBE2E
+- Warm off-white: #FFF9F4
+- Body text: dark navy/charcoal
+Layout and interaction
+- Mobile-first responsive design.
+- Clear navigation: Home, Shop, Build a Gift, Corporate Gifts, About, Contact.
+- Persistent but unobtrusive “Build a Gift” call to action.
+- Accessible color contrast, keyboard support, form labels, focus states, and alt text.
+- Optimize images and lazy-load below-the-fold media.
+- Keep transitions short and avoid unnecessary animation.
+- Make English and Portuguese support an explicit product requirement if both languages are required at launch.
+7. Data and system architecture
+Recommended flow
+Customer browser
+      |
+      v
+Public website (GitHub source, deployed on Render)
+      |
+      +---- Public catalogue reads ----> Supabase (existing project)
+      |                                  |
+      |                                  +-- RLS allows only approved public catalogue fields
+      |
+      +---- Gift Builder / quote enquiry ----> Server-side API
+      |                                        |
+      |                                        +-- Validate and limit requests
+      |                                        +-- Keep AI keys on server
+      |                                        +-- Send enquiry to an approved destination
+      |
+      +---- AI concept request ----------> AI provider through server API
+                                               |
+                                               +-- Return concept text/image
+Read-only database boundary
+The requested website should read the same existing database for catalogue information. Treat “read-only” as the public website's database permission boundary, not merely a promise in frontend code.
+- Use a publishable/anonymous key only for catalogue reads that are explicitly allowed by RLS.
+- Never put SUPABASE_SECRET_KEY, a service-role key, AI provider keys, or other privileged credentials in client-side JavaScript or a public GitHub repository.
+- Do not grant public writes to customers, quotes, orders, expenses, or other internal tables just to implement enquiries.
+- If the customer submits a Gift Builder enquiry, use a server-side endpoint with validation and abuse protection. It may send an email or store the enquiry only through a separately approved, narrowly scoped mechanism.
+- If enquiry persistence is required, agree on the destination first: a protected server-side workflow, a dedicated public-enquiry table with strict policies, or the existing app's authenticated API if a suitable endpoint exists. Do not assume that endpoint already exists.
+- Public order tracking, if added later, must use a secure token or authenticated customer access and must never expose another customer's order.
+Suggested deployment separation
+- GitHub: version-controlled source repository; use a private repository if the source should not be public.
+- Render: deploy the website/service from GitHub; configure environment variables in Render.
+- Supabase: existing data and approved public catalogue reads.
+- AI provider: accessed only from a server-side endpoint.
+- Image storage: use existing public product assets only when they are intended for public display; do not expose private storage buckets.
+The README notes that Render Free services can sleep after 15 minutes of inactivity and the first request may take around a minute. Confirm current Render plan behavior and suitability before production. A storefront intended for customers may need a paid always-on service for consistent response times. Static hosting is possible only if the implementation is genuinely static; AI secret handling and protected server endpoints require a server-side component.
+8. Security, privacy, and reliability
+- Keep the existing management app's private tables and APIs inaccessible to public visitors.
+- Verify Supabase RLS using unauthenticated test requests.
+- Validate all user input server-side; apply rate limits and abuse prevention to AI and enquiry endpoints.
+- Set spending limits and request quotas for AI features where available.
+- Avoid sending customer contact details or sensitive information to an AI provider unless necessary and disclosed.
+- Provide privacy notice and consent language appropriate to the final implementation.
+- Do not expose private purchase proofs, customer records, staff information, affiliate ledgers, or internal financial data.
+- Do not commit .env files or API keys.
+- Log operational errors without logging secrets or unnecessary personal data.
+- Add automated tests for public catalogue access, private data denial, input validation, and API failure handling.
+9. Scope boundaries
+Included in initial release
+- Brand-led responsive homepage.
+- Public product and collection catalogue connected to Supabase.
+- Product detail pages.
+- Custom Gift Builder with guided choices.
+- AI-generated text suggestions and a proposed AI concept-image flow, subject to provider selection and budget.
+- Contact/quotation enquiry submission through an approved server-side workflow.
+- Corporate gifting landing page.
+- Discovery Friends integration.
+- Basic analytics, SEO metadata, accessibility, error handling, and deployment setup.
+Not assumed for initial release
+- Online payment and checkout.
+- Live stock reservation.
+- Guaranteed delivery dates or delivery fee calculation.
+- Customer accounts or order history.
+- Automatic creation of orders/quotes inside the management app.
+- Real-time synchronization beyond catalogue reads.
+- Full interactive 3D product configurator.
+- AI image generation without provider selection, cost limits, and API implementation.
+- CRM/marketing automation beyond agreed enquiry routing.
+These can be added after the initial site and workflows are validated.
+10. Delivery phases
+Phase 0 — Discovery and technical validation
+- Inspect the current Supabase catalogue schema, RLS policies, public image URLs, product/collection fields, and existing server API.
+- Confirm public pricing rules, supported customizations, contact details, languages, and quotation process.
+- Choose the AI text/image provider and define cost limits.
+- Confirm Render deployment plan and domain.
+Deliverable: approved data map and technical decisions.
+Phase 1 — Brand storefront
+- Build navigation, homepage, catalogue, collections, product pages, corporate gifts, and contact page.
+- Connect public catalogue reads to Supabase.
+- Apply the logo, palette, and mascot system.
+- Test responsive behavior, accessibility, performance, and security.
+Deliverable: public storefront deployed to a preview environment.
+Phase 2 — Gift Builder
+- Implement guided gift selection, summary, selected product list, budget guidance, and enquiry handoff.
+- Add AI text suggestions and controlled catalogue-grounded recommendations.
+- Add concept-image generation if the provider and budget are approved.
+- Add disclaimers, input validation, rate limits, and error states.
+Deliverable: tested Gift Builder with enquiry workflow.
+Phase 3 — Launch readiness
+- Connect production domain and HTTPS.
+- Verify RLS and server-side secret handling.
+- Test on mobile and desktop.
+- Test empty catalogue, unavailable AI provider, slow responses, invalid input, and deployment restart.
+- Add privacy/terms pages, analytics, backups/monitoring plan, and operational ownership.
+Deliverable: production launch checklist and live website.
+Phase 4 — Optional 3D and commerce expansion
+- Create a small library of actual 3D box/product assets.
+- Build interactive placement, rotation, and supported customization.
+- Consider checkout/payment, customer accounts, order tracking, and deeper management-app integration only after process decisions are finalized.
+11. Acceptance criteria
+The initial release is accepted when:
+- Visitors can browse only approved public catalogue items.
+- Product and collection data come from the existing Supabase source of truth.
+- No private management data or privileged keys are accessible from the browser.
+- The Gift Builder guides a user from occasion/preferences to a reviewable gift concept.
+- AI output is clearly marked as suggestions and is grounded in the available catalogue.
+- The user can submit an enquiry through the approved server-side workflow.
+- The website works at mobile, tablet, and desktop widths.
+- The logo, colors, and mascots are applied consistently.
+- Loading, empty, invalid-input, and provider-failure states are handled.
+- Deployment survives a restart without depending on local persistent files.
+- Basic security, accessibility, and performance checks pass.
+12. Decisions required before implementation
+1. Language: English, Portuguese, or both at launch?
+2. Pricing: show public prices, “request a quote,” or both depending on product?
+3. Enquiry destination: email only initially, or persist enquiries somewhere that staff can process?
+4. Gift preview: start with AI-generated 2D concept images, then add true interactive 3D later?
+5. AI budget: what monthly budget or maximum cost per generated concept is acceptable?
+6. Public catalogue: which products and collections are approved for display, and are prices/images complete?
+7. Hosting: is Render Free acceptable for a prototype, or is an always-on production service required?
+13. Final recommendation
+Build the storefront and Gift Builder as one cohesive website, with Supabase as the read-only source for approved public catalogue data. Launch first with guided gift creation and AI-assisted concepts; treat true interactive 3D as a separate phase requiring real 3D assets. Keep all privileged operations and AI credentials on the server, and make the enquiry workflow explicit rather than silently writing to the internal management database.
+This approach creates a distinctive, mascot-led customer experience while protecting the existing business management app and leaving room for future e-commerce capabilities.
