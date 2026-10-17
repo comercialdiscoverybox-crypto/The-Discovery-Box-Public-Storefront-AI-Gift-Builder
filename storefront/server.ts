@@ -1,0 +1,262 @@
+import path from 'node:path';
+import fs from 'node:fs';
+import express from 'express';
+import { createClient } from '@supabase/supabase-js';
+import { createServer as createViteServer } from 'vite';
+
+const directory = path.join(process.cwd(), 'storefront');
+export const app = express();
+const port = Number(process.env.PORT || 3000);
+const production = process.env.NODE_ENV === 'production';
+const limits = new Map<string, { count: number; resetAt: number }>();
+
+app.disable('x-powered-by');
+app.set('trust proxy', 1);
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (production) res.setHeader('Strict-Transport-Security', 'max-age=31536000');
+  next();
+});
+app.use(express.json({ limit: '16kb' }));
+
+function rateLimit(maxRequests: number, windowMs: number) {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const now = Date.now();
+    const key = req.ip || 'unknown';
+    const current = limits.get(key);
+    if (!current || current.resetAt <= now) {
+      limits.set(key, { count: 1, resetAt: now + windowMs });
+    } else if (current.count >= maxRequests) {
+      res.status(429).json({ error: 'Too many requests. Please try again later.' });
+      return;
+    } else {
+      current.count += 1;
+    }
+    if (limits.size > 2000) {
+      for (const [ip, entry] of limits) if (entry.resetAt <= now) limits.delete(ip);
+    }
+    next();
+  };
+}
+
+function getPublicSupabase() {
+  const url = process.env.SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_PUBLISHABLE_KEY?.trim();
+  if (!url || !key) return null;
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+}
+
+function isText(value: unknown, max: number): value is string {
+  return typeof value === 'string' && value.length <= max;
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  })[character] || character);
+}
+
+app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
+
+app.get('/api/public-config', (_req, res) => {
+  const email = process.env.PUBLIC_CONTACT_EMAIL?.trim() || '';
+  const whatsapp = process.env.PUBLIC_WHATSAPP_URL?.trim() || '';
+  res.json({
+    email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : '',
+    whatsapp: /^https:\/\/(wa\.me|api\.whatsapp\.com)\//.test(whatsapp) ? whatsapp : '',
+  });
+});
+
+app.get('/api/catalog', async (_req, res) => {
+  const supabase = getPublicSupabase();
+  if (!supabase) {
+    res.status(503).json({ error: 'The public catalogue is not configured.' });
+    return;
+  }
+  const [items, collections] = await Promise.all([
+    supabase.from('public_catalog_items').select('id,family,collection,category,name_en,name_pt,description_en,description_pt,price_mzn,images,image_crops,primary_image_index').order('id'),
+    supabase.from('public_catalog_collections').select('id,family,name_en,name_pt,tagline_en,tagline_pt,image_url,image_crop').order('id'),
+  ]);
+  if (items.error || collections.error) {
+    console.error('Public catalogue query failed', {
+      items: items.error?.code || null,
+      collections: collections.error?.code || null,
+    });
+    res.status(502).json({ error: 'The public catalogue is temporarily unavailable.' });
+    return;
+  }
+  res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+  res.json({ items: items.data || [], collections: collections.data || [] });
+});
+
+app.post('/api/enquiries', rateLimit(5, 15 * 60 * 1000), async (req, res) => {
+  const { name, email, phone = '', language, occasion, recipient, budget = '', preferences = '', cardMessage = '', products = [], website = '', consent } = req.body || {};
+  if (website) {
+    res.status(400).json({ error: 'Invalid request.' });
+    return;
+  }
+  if (
+    !isText(name, 120) || !name.trim() ||
+    !isText(email, 254) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+    !isText(phone, 40) ||
+    !['en', 'pt'].includes(language) ||
+    !isText(occasion, 80) || !isText(recipient, 80) ||
+    !isText(budget, 24) || (budget !== '' && (!/^\d+(\.\d{1,2})?$/.test(budget) || Number(budget) > 10000000)) ||
+    !isText(preferences, 1000) ||
+    !isText(cardMessage, 500) ||
+    !Array.isArray(products) || products.length > 5 ||
+    !products.every((product: unknown) => isText(product, 120)) ||
+    consent !== true
+  ) {
+    res.status(400).json({ error: 'Please check the enquiry details and try again.' });
+    return;
+  }
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+  const from = process.env.ENQUIRY_FROM_EMAIL?.trim();
+  const to = process.env.ENQUIRY_TO_EMAIL?.trim();
+  if (!apiKey || !from || !to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(from) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+    res.status(503).json({ error: 'Enquiry email is not configured.' });
+    return;
+  }
+
+  const fields = [
+    ['Name', name.trim()],
+    ['Email', email.trim()],
+    ['Phone', phone.trim() || 'Not provided'],
+    ['Language', language],
+    ['Occasion', occasion],
+    ['Recipient', recipient],
+    ['Budget (MZN)', budget || 'Not provided'],
+    ['Preferences', preferences || 'Not provided'],
+    ['Gift-card message', cardMessage || 'Not provided'],
+    ['Selected public products', products.length ? products.join(', ') : 'None selected'],
+  ];
+  const html = fields.map(([label, value]) =>
+    `<p><strong>${escapeHtml(label)}:</strong><br>${escapeHtml(value).replace(/\n/g, '<br>')}</p>`,
+  ).join('');
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from,
+        to: [to],
+        reply_to: email.trim(),
+        subject: `Gift enquiry — ${name.trim().replace(/[\r\n\0-\x1f\x7f]/g, ' ').slice(0, 80)}`,
+        html,
+      }),
+    });
+    if (!response.ok) {
+      console.error('Enquiry email provider rejected a message', { status: response.status });
+      res.status(502).json({ error: 'The enquiry could not be delivered. Please try again later.' });
+      return;
+    }
+    res.status(202).json({ status: 'accepted' });
+  } catch {
+    console.error('Enquiry email provider could not be reached');
+    res.status(502).json({ error: 'The enquiry could not be delivered. Please try again later.' });
+  }
+});
+
+app.post('/api/gift-image', rateLimit(3, 15 * 60 * 1000), async (req, res) => {
+  const { language, occasion, recipient, budget = '', preferences = '', products = [] } = req.body || {};
+  if (
+    !['en', 'pt'].includes(language) ||
+    !isText(occasion, 80) || !isText(recipient, 80) ||
+    !isText(budget, 24) || (budget !== '' && (!/^\d+(\.\d{1,2})?$/.test(budget) || Number(budget) > 10000000)) ||
+    !isText(preferences, 1000) ||
+    !Array.isArray(products) || products.length > 5 ||
+    !products.every((product: unknown) => isText(product, 120))
+  ) {
+    res.status(400).json({ error: 'Please check the gift details and try again.' });
+    return;
+  }
+  const apiKey = process.env.GEMINI_API_KEY?.trim();
+  if (process.env.AI_IMAGE_ENABLED !== 'true' || !apiKey) {
+    res.status(503).json({ error: 'Illustrative image generation is not configured.' });
+    return;
+  }
+  const prompt = [
+    'Create a polished, warm, premium editorial still-life illustration of a thoughtful gift arrangement.',
+    'Show a tasteful gift box, tissue, ribbon and card, with a joyful colorful palette including deep navy, turquoise, coral and warm yellow.',
+    'This is only a mood-board concept; do not add logos, text, prices, brand names, or claim exact product shapes.',
+    `Occasion: ${occasion}. Recipient: ${recipient}.`,
+    budget ? `Target budget guidance: ${budget} MZN (do not show numbers).` : '',
+    preferences ? `Style preferences: ${preferences}.` : '',
+    products.length ? `Selected catalogue inspiration, not guaranteed exact objects: ${products.join(', ')}.` : '',
+    language === 'pt' ? 'Use visual storytelling only and do not render words.' : '',
+  ].filter(Boolean).join('\n');
+
+  try {
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent', {
+      method: 'POST',
+      headers: { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
+      }),
+    });
+    if (!response.ok) {
+      console.error('AI image provider rejected a request', { status: response.status });
+      res.status(502).json({ error: 'The image provider is temporarily unavailable.' });
+      return;
+    }
+    const result = await response.json() as {
+      candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { mimeType?: string; data?: string } }> } }>;
+    };
+    const image = result.candidates?.[0]?.content?.parts?.find((part) =>
+      part.inlineData?.mimeType?.startsWith('image/') && part.inlineData.data,
+    )?.inlineData;
+    if (
+      !image?.mimeType || !/^image\/(png|jpeg|webp)$/.test(image.mimeType) ||
+      !image.data || image.data.length > 8000000
+    ) {
+      console.error('AI image provider returned no image');
+      res.status(502).json({ error: 'The image provider returned no image.' });
+      return;
+    }
+    res.json({ image: `data:${image.mimeType};base64,${image.data}` });
+  } catch {
+    console.error('AI image provider could not be reached');
+    res.status(502).json({ error: 'The image provider is temporarily unavailable.' });
+  }
+});
+
+async function start() {
+  if (production) {
+    const clientDirectory = path.join(directory, '..', 'dist', 'storefront', 'client');
+    app.use(express.static(clientDirectory, { index: false, maxAge: '1h' }));
+    app.get('*', (_req, res) => res.sendFile(path.join(clientDirectory, 'index.html')));
+  } else {
+    const vite = await createViteServer({
+      configFile: path.join(directory, 'vite.config.ts'),
+      server: { middlewareMode: true },
+      appType: 'custom',
+    });
+    app.use(vite.middlewares);
+    app.get('*', async (req, res, next) => {
+      try {
+        const htmlFile = path.join(directory, 'client', 'index.html');
+        const html = fs.readFileSync(htmlFile, 'utf8');
+        res.status(200).type('html').send(await vite.transformIndexHtml(req.originalUrl, html));
+      } catch (error) {
+        vite.ssrFixStacktrace(error as Error);
+        next(error);
+      }
+    });
+  }
+
+  app.listen(port, '0.0.0.0', () => {
+    console.log(`Storefront listening on port ${port}`);
+  });
+}
+
+if (process.env.NODE_ENV !== 'test') {
+  start().catch((error: unknown) => {
+    console.error('Storefront failed to start', error);
+    process.exitCode = 1;
+  });
+}
