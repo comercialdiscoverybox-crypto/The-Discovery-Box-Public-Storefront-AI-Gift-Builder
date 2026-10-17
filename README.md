@@ -11,11 +11,17 @@ npm ci
 npm run dev:storefront
 ```
 
-The website runs at `http://localhost:3000`. Catalogue reads require `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`; without them, the site reports that the public catalogue is unavailable instead of showing sample data. Copy `.env.example` to `.env` for local configuration.
+The website runs at `http://localhost:3000`. The server loads `.env` automatically for local development. Catalogue reads require `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`; without them, the site reports that the public catalogue is unavailable instead of showing sample data. Copy `.env.example` to `.env` and fill in the Supabase project URL and its public publishable/anon key. Never put the secret/service-role key in this file.
 
 ## Existing Supabase project
 
-Apply [`supabase/migrations/20261017010000_public_storefront_catalog.sql`](./supabase/migrations/20261017010000_public_storefront_catalog.sql) to the existing database before enabling catalogue reads. It adds explicit product visibility and price approval fields and exposes only filtered public views. New flags default to false, so an Admin must approve each product and any price in the management application before they appear publicly.
+Apply the migrations in order to the existing database:
+
+1. [`supabase/migrations/20261017010000_public_storefront_catalog.sql`](./supabase/migrations/20261017010000_public_storefront_catalog.sql) creates restricted public catalogue views and revokes anonymous access to the raw catalogue tables.
+2. [`supabase/migrations/20261017030000_public_catalog_active_items.sql`](./supabase/migrations/20261017030000_public_catalog_active_items.sql) makes active catalogue items, their positive prices, and their associated collections/categories visible through those views.
+3. [`supabase/migrations/20261017040000_security_invoker_catalog_views.sql`](./supabase/migrations/20261017040000_security_invoker_catalog_views.sql) removes SECURITY DEFINER view access by making the views use caller privileges and granting narrowly scoped column access with active-only RLS policies.
+
+The storefront follows the management catalogue's `active` status: inactive products are not returned; active products and their catalogue images/descriptions are public; positive prices are shown. Confirm that active items are intended for public viewing before applying the second migration.
 
 Configure only the Supabase URL and publishable key on this service. **Never configure the management app's secret/service-role key here.**
 

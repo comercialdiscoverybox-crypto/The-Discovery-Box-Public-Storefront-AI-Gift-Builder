@@ -11,11 +11,13 @@ npm ci
 npm run dev:storefront
 ```
 
-The storefront uses `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` to read only the `public_catalog_*` views. Do not add `SUPABASE_SECRET_KEY` to this service. The catalogue migration must be applied to the existing Supabase project before catalogue reads will work:
+The storefront uses `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` to read only the `public_catalog_*` views. Do not add `SUPABASE_SECRET_KEY` to this service. Apply these migrations to the existing Supabase project in order before catalogue reads will return active products:
 
-[`../supabase/migrations/20261017010000_public_storefront_catalog.sql`](../supabase/migrations/20261017010000_public_storefront_catalog.sql)
+- [`../supabase/migrations/20261017010000_public_storefront_catalog.sql`](../supabase/migrations/20261017010000_public_storefront_catalog.sql) creates restricted public views and revokes anonymous/authenticated access to the raw catalogue tables.
+- [`../supabase/migrations/20261017030000_public_catalog_active_items.sql`](../supabase/migrations/20261017030000_public_catalog_active_items.sql) exposes active products, positive prices, and their associated collections/categories.
+- [`../supabase/migrations/20261017040000_security_invoker_catalog_views.sql`](../supabase/migrations/20261017040000_security_invoker_catalog_views.sql) makes the views honor caller privileges/RLS and grants only the public catalogue columns needed by the views.
 
-The migration removes anonymous/authenticated access to the raw catalogue tables and grants read access only to filtered views. Products must be both active and explicitly published from the staff catalogue editor; `publicly_visible` and `price_public` default to `false`. Only Admins can newly publish a product or approve a public price. Prices remain hidden until explicitly approved. Products do not become public automatically after migration; verify that each product and its image URLs are approved before publishing it.
+The storefront follows the management catalogue's `active` status. Inactive products stay hidden; active products expose their names, descriptions, images, and positive prices publicly. Verify that active products and media are approved for public viewing before applying the active-items migration.
 
 ## Render preview service
 

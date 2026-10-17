@@ -6,6 +6,16 @@
     <meta name="theme-color" content="#102b56" />
     <meta name="description" content="Thoughtful gifts, made personal. Explore The Discovery Box and create a gift that feels just right." />
     <title>The Discovery Box — Gifts with a little more meaning</title>
+    <script>
+      try {
+        if (localStorage.getItem('discovery-theme') === 'dark') {
+          document.documentElement.dataset.theme = 'dark';
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#101820');
+        }
+      } catch (error) {
+        console.warn('Could not restore the saved theme before page render', error);
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

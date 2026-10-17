@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from 'react';
-import { getCatalogImageCropStyle } from '../../../src/lib/catalogImageCrop';
+import { useEffect, useMemo, useState, type CSSProperties, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react';
 
 type Language = 'en' | 'pt';
+type Theme = 'light' | 'dark';
 type CatalogItem = {
   id: string;
   family: 'PLAY' | 'HOME' | 'BUSINESS';
@@ -38,6 +38,12 @@ const copy = {
     navCorporate: 'Corporate gifts',
     navAbout: 'Our story',
     navContact: 'Contact',
+    themeLight: 'Switch to light mode',
+    themeDark: 'Switch to dark mode',
+    menu: 'Open navigation menu',
+    possibleWorlds: 'A world of possibilities',
+    chosenWithCare: 'Chosen with care',
+    madeForYou: <>made<br />for you</>,
     heroEyebrow: 'A little wonder, thoughtfully wrapped',
     heroTitle: 'Give them a moment they’ll remember.',
     heroBody: 'Discover meaningful gifts and make every celebration feel like theirs.',
@@ -48,8 +54,45 @@ const copy = {
     introBody: 'From a small thank-you to a big celebration, explore ideas selected with care.',
     collectionTitle: 'Explore our worlds',
     collectionBody: 'A little something for play, home and the people you work with.',
+    collectionBrowse: 'Explore collections',
+    categoryLabel: 'Browse by category',
+    collectionLabel: 'Collections',
+    categoryPlay: 'Toys & Creative Figures',
+    categoryHome: 'Creative & Functional Objects',
+    categoryBusiness: 'Corporate & Personalized Gifts',
+    itemsCount: (count: number) => `${count} ${count === 1 ? 'discovery' : 'discoveries'}`,
+    momentEyebrow: 'A little ritual, a lasting memory',
+    momentTitle: 'Your Discovery Moment',
+    momentBody: 'The best part is seeing what someone discovers inside.',
+    momentSteps: [
+      ['UNBOX', 'Open your Discovery Box and let the surprise begin.'],
+      ['SNAP', 'Capture the smile, the detail or the favourite find.'],
+      ['SHARE', 'Share your moment with the people you love.'],
+      ['TAG', 'Tag @the_discoverybox so we can celebrate with you.'],
+      ['TELL US', 'We would love to hear what you discovered.'],
+    ],
+    valuesTitle: 'Made with curiosity. Shared with care.',
+    values: [
+      ['Creativity', 'We think beyond the ordinary.'],
+      ['Discovery', 'We love making things that surprise.'],
+      ['Personalisation', 'A little detail can make it truly yours.'],
+      ['Thoughtfulness', 'A gift should carry meaning.'],
+      ['Quality', 'Every custom piece deserves care.'],
+    ],
+    whatWeMake: 'Thoughtful gifts, playful objects and original 3D creations.',
+    whyWeMake: 'We turn ideas into discoveries, and ordinary moments into something personal.',
+    howWeMake: 'Creativity, design, 3D printing and personalisation come together in every discovery.',
+    brandFeeling: '“I discovered something special.”',
+    aboutValues: 'What we believe',
+    collectionFor: (name: string) => `Explore ${name}`,
+    categoryFilter: 'Categories',
+    results: 'Showing',
+    menuClose: 'Close navigation menu',
+    languageLabel: 'Language',
+    pageTitle: 'The Discovery Box — Gifts with a little more meaning',
+    pageDescription: 'Thoughtful gifts, made personal. Explore The Discovery Box and create a gift that feels just right.',
     popularTitle: 'Made for moments that matter',
-    productsBody: 'Browse the approved public collection. Every detail is confirmed with our team.',
+    productsBody: 'Browse our active catalogue. Availability and final details are confirmed with our team.',
     shop: 'The collection',
     all: 'All gifts',
     play: 'PLAY',
@@ -60,6 +103,9 @@ const copy = {
     loading: 'Finding thoughtful things…',
     requestQuote: 'Ask about this gift',
     buildWith: 'Build a gift around this',
+    imageNumber: (current: number, total: number) => `Image ${current} of ${total}`,
+    previousImage: 'Show previous product image',
+    nextImage: 'Show next product image',
     noPrice: 'Request a quote',
     backShop: 'Back to the collection',
     builderEyebrow: 'Your idea, made personal',
@@ -99,6 +145,10 @@ const copy = {
     aboutBody: 'The Discovery Box brings together thoughtful finds and personal touches to make the people in your life feel truly seen.',
     contactTitle: 'We’d love to hear what you’re celebrating.',
     contactBody: 'Tell us a little about the moment and our team will get back to you.',
+    instagramTitle: 'Follow the little discoveries.',
+    instagramBody: 'Scan the code to find us on Instagram, share your Discovery Moment and tag @the_discoverybox.',
+    instagramScan: 'Scan to follow',
+    instagramQrAlt: 'Instagram QR code for @the_discoverybox',
     contactOptions: 'Contact options are being confirmed. You can still send an enquiry using the gift builder.',
     privacyTitle: 'Privacy notice',
     privacyBody: 'We use the contact details and gift brief you submit only to respond to your enquiry. Your contact details are sent to our enquiry email provider and are not sent to the image-generation provider. If you choose to request an illustrative image, only your gift preferences and selected public product names are sent to the AI provider. This site stores your language choice in your browser. Please do not include sensitive personal information in the gift brief.',
@@ -107,6 +157,7 @@ const copy = {
     occasions: ['Birthday', 'Anniversary', 'Thank you', 'New baby', 'Celebration', 'Corporate event', 'Something else'],
     recipients: ['Friend', 'Partner', 'Child', 'Family member', 'Colleague', 'Client', 'Someone else'],
     notFound: 'We couldn’t find that page.',
+    businessCollections: 'Ideas for your brand, team and next big moment.',
   },
   pt: {
     navShop: 'Loja',
@@ -114,6 +165,12 @@ const copy = {
     navCorporate: 'Presentes empresariais',
     navAbout: 'A nossa história',
     navContact: 'Contacto',
+    themeLight: 'Mudar para o modo claro',
+    themeDark: 'Mudar para o modo escuro',
+    menu: 'Abrir menu de navegação',
+    possibleWorlds: 'Um mundo de possibilidades',
+    chosenWithCare: 'Escolhido com carinho',
+    madeForYou: <>feito<br />para si</>,
     heroEyebrow: 'Um pouco de encanto, preparado com carinho',
     heroTitle: 'Ofereça um momento inesquecível.',
     heroBody: 'Descubra presentes especiais e torne cada celebração única.',
@@ -124,8 +181,45 @@ const copy = {
     introBody: 'De um pequeno agradecimento a uma grande celebração, descubra ideias escolhidas com cuidado.',
     collectionTitle: 'Explore os nossos mundos',
     collectionBody: 'Ideias para brincar, para a casa e para as pessoas com quem trabalha.',
+    collectionBrowse: 'Explore as coleções',
+    categoryLabel: 'Explore por categoria',
+    collectionLabel: 'Coleções',
+    categoryPlay: 'Brinquedos e Figuras Criativas',
+    categoryHome: 'Objetos Criativos e Funcionais',
+    categoryBusiness: 'Presentes Corporativos e Personalizados',
+    itemsCount: (count: number) => `${count} ${count === 1 ? 'descoberta' : 'descobertas'}`,
+    momentEyebrow: 'Um pequeno ritual, uma memória para guardar',
+    momentTitle: 'O Seu Momento Discovery',
+    momentBody: 'A melhor parte é ver o que alguém descobre lá dentro.',
+    momentSteps: [
+      ['ABRA', 'Abra a sua Discovery Box e deixe a surpresa começar.'],
+      ['FOTOGRAFE', 'Guarde o sorriso, o detalhe ou a descoberta favorita.'],
+      ['PARTILHE', 'Partilhe o momento com as pessoas de quem gosta.'],
+      ['IDENTIFIQUE', 'Identifique @the_discoverybox para celebrarmos consigo.'],
+      ['CONTE-NOS', 'Adoramos saber o que descobriu.'],
+    ],
+    valuesTitle: 'Criado com curiosidade. Partilhado com carinho.',
+    values: [
+      ['Criatividade', 'Pensamos para além do convencional.'],
+      ['Descoberta', 'Gostamos de criar coisas que surpreendem.'],
+      ['Personalização', 'Um pequeno detalhe pode torná-lo verdadeiramente seu.'],
+      ['Dedicação', 'Um presente deve ter significado.'],
+      ['Qualidade', 'Cada peça personalizada merece cuidado.'],
+    ],
+    whatWeMake: 'Presentes especiais, objetos divertidos e criações 3D originais.',
+    whyWeMake: 'Transformamos ideias em descobertas e momentos comuns em algo pessoal.',
+    howWeMake: 'Criatividade, design, impressão 3D e personalização em cada descoberta.',
+    brandFeeling: '“Descobri algo especial.”',
+    aboutValues: 'No que acreditamos',
+    collectionFor: (name: string) => `Explore ${name}`,
+    categoryFilter: 'Categorias',
+    results: 'A mostrar',
+    menuClose: 'Fechar menu de navegação',
+    languageLabel: 'Idioma',
+    pageTitle: 'The Discovery Box — Presentes com significado',
+    pageDescription: 'Presentes especiais e criações personalizadas. Descubra a The Discovery Box e crie um presente único.',
     popularTitle: 'Feito para momentos especiais',
-    productsBody: 'Explore a coleção pública aprovada. Cada detalhe é confirmado pela nossa equipa.',
+    productsBody: 'Explore o nosso catálogo ativo. A disponibilidade e os detalhes finais são confirmados pela nossa equipa.',
     shop: 'A coleção',
     all: 'Todos os presentes',
     play: 'BRINCAR',
@@ -136,6 +230,9 @@ const copy = {
     loading: 'A encontrar presentes especiais…',
     requestQuote: 'Perguntar sobre este presente',
     buildWith: 'Criar um presente a partir deste',
+    imageNumber: (current: number, total: number) => `Imagem ${current} de ${total}`,
+    previousImage: 'Mostrar imagem anterior do produto',
+    nextImage: 'Mostrar imagem seguinte do produto',
     noPrice: 'Solicitar orçamento',
     backShop: 'Voltar à coleção',
     builderEyebrow: 'A sua ideia, feita à medida',
@@ -175,6 +272,10 @@ const copy = {
     aboutBody: 'A Discovery Box reúne descobertas especiais e toques pessoais para que as pessoas importantes se sintam verdadeiramente valorizadas.',
     contactTitle: 'Conte-nos o que vamos celebrar.',
     contactBody: 'Diga-nos um pouco sobre a ocasião e a nossa equipa entrará em contacto.',
+    instagramTitle: 'Acompanhe pequenas descobertas.',
+    instagramBody: 'Leia o código para nos encontrar no Instagram, partilhe o seu momento Discovery e identifique @the_discoverybox.',
+    instagramScan: 'Leia para seguir',
+    instagramQrAlt: 'Código QR do Instagram para @the_discoverybox',
     contactOptions: 'Os contactos estão a ser confirmados. Ainda pode enviar um pedido através do criador de presentes.',
     privacyTitle: 'Aviso de privacidade',
     privacyBody: 'Utilizamos os contactos e a descrição enviados apenas para responder ao seu pedido. Os seus contactos são enviados ao nosso serviço de email e não são enviados ao serviço de criação de imagens. Se pedir uma imagem ilustrativa, apenas as preferências e os nomes dos produtos públicos selecionados são enviados ao fornecedor de IA. Este site guarda a sua preferência de idioma no navegador. Não inclua informações pessoais sensíveis na descrição.',
@@ -183,6 +284,7 @@ const copy = {
     occasions: ['Aniversário', 'Aniversário de relacionamento', 'Agradecimento', 'Nascimento', 'Celebração', 'Evento empresarial', 'Outra ocasião'],
     recipients: ['Amigo/a', 'Companheiro/a', 'Criança', 'Familiar', 'Colega', 'Cliente', 'Outra pessoa'],
     notFound: 'Não encontrámos esta página.',
+    businessCollections: 'Ideias para a sua marca, equipa e próxima celebração.',
   },
 } as const;
 
@@ -203,13 +305,54 @@ function readLanguagePreference(): Language {
   }
 }
 
+function readThemePreference(): Theme {
+  try {
+    return window.localStorage.getItem('discovery-theme') === 'dark' ? 'dark' : 'light';
+  } catch (error) {
+    console.warn('Could not read the saved theme preference', error);
+    return 'light';
+  }
+}
+
 function App() {
   const [language, setLanguage] = useState<Language>(readLanguagePreference);
+  const [theme, setTheme] = useState<Theme>(readThemePreference);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [currentUrl, setCurrentUrl] = useState(() => `${window.location.pathname}${window.location.search}${window.location.hash}`);
   const [catalog, setCatalog] = useState<CatalogResponse>({ items: [], collections: [] });
   const [catalogState, setCatalogState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [contact, setContact] = useState<{ email: string; whatsapp: string }>({ email: '', whatsapp: '' });
   const t = copy[language];
-  const path = window.location.pathname.replace(/\/+$/, '') || '/';
+  const currentLocation = new URL(currentUrl, window.location.origin);
+  const path = currentLocation.pathname.replace(/\/+$/, '') || '/';
+
+  useEffect(() => {
+    const syncLocation = () => {
+      setCurrentUrl(`${window.location.pathname}${window.location.search}${window.location.hash}`);
+      setMobileMenuOpen(false);
+    };
+    window.addEventListener('popstate', syncLocation);
+    return () => window.removeEventListener('popstate', syncLocation);
+  }, []);
+
+  const handleInternalNavigation = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (!(event.target instanceof Element)) return;
+    const anchor = event.target.closest('a[href]');
+    if (!(anchor instanceof HTMLAnchorElement) || anchor.hasAttribute('download') || (anchor.target && anchor.target !== '_self')) return;
+
+    const destination = new URL(anchor.href);
+    if (destination.origin !== window.location.origin) return;
+
+    event.preventDefault();
+    const nextUrl = `${destination.pathname}${destination.search}${destination.hash}`;
+    if (nextUrl !== currentUrl) {
+      window.history.pushState(null, '', nextUrl);
+      setCurrentUrl(nextUrl);
+    }
+    setMobileMenuOpen(false);
+    window.scrollTo(0, 0);
+  };
 
   useEffect(() => {
     try {
@@ -218,7 +361,22 @@ function App() {
       console.warn('Could not save the language preference', error);
     }
     document.documentElement.lang = language;
-  }, [language]);
+    document.title = t.pageTitle;
+    document.querySelector('meta[name="description"]')?.setAttribute('content', t.pageDescription);
+  }, [language, t.pageDescription, t.pageTitle]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('discovery-theme', theme);
+    } catch (error) {
+      console.warn('Could not save the theme preference', error);
+    }
+    document.documentElement.dataset.theme = theme;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute(
+      'content',
+      theme === 'dark' ? '#101820' : '#fff9f4',
+    );
+  }, [theme]);
 
   useEffect(() => {
     fetch('/api/catalog').then((response) => {
@@ -237,9 +395,34 @@ function App() {
   const itemById = useMemo(() => new Map(catalog.items.map((item) => [item.id, item])), [catalog.items]);
   const selectedItemId = path.startsWith('/product/') ? decodeURIComponent(path.slice('/product/'.length)) : '';
   const selectedItem = itemById.get(selectedItemId);
+  const [selectedProductImages, setSelectedProductImages] = useState<Record<string, number>>({});
   const productImage = (item: CatalogItem) => item.images?.[item.primary_image_index] || item.images?.[0] || '';
-  const productImageStyle = (item: CatalogItem) =>
-    getCatalogImageCropStyle(item.image_crops?.[item.primary_image_index] || item.image_crops?.[0]);
+  const imageStyle = (item: CatalogItem, index: number): CSSProperties => {
+    const crop = item.image_crops?.[index];
+    return { objectPosition: `${crop?.x ?? 50}% ${crop?.y ?? 50}%` };
+  };
+  const productImageStyle = (item: CatalogItem) => imageStyle(item, item.primary_image_index);
+  const collectionForItem = (item: CatalogItem) => catalog.collections.find((collection) =>
+    collection.family === item.family &&
+    [collection.id, collection.name_en, collection.name_pt].includes(item.collection),
+  );
+  const collectionNameFor = (collection: Collection) => language === 'en' ? collection.name_en : collection.name_pt;
+  const categoryNameFor = (category: string) => ({
+    'Brinquedos e Figuras Criativas': t.categoryPlay,
+    'Toys & Creative Figures': t.categoryPlay,
+    'Objetos Criativos e Funcionais': t.categoryHome,
+    'Creative & Functional Objects': t.categoryHome,
+    'Presentes Corporativos e Personalizados': t.categoryBusiness,
+    'Corporate & Personalized Gifts': t.categoryBusiness,
+  }[category] || category);
+  const worlds = (['PLAY', 'HOME', 'BUSINESS'] as const).map((family) => {
+    const featuredItem = catalog.items.find((item) => item.family === family && productImage(item));
+    return { family, featuredItem };
+  });
+  const selectProductImage = (item: CatalogItem, index: number) => setSelectedProductImages((current) => ({
+    ...current,
+    [item.id]: index,
+  }));
   const nameFor = (item: CatalogItem) => language === 'en' ? item.name_en : item.name_pt;
   const descriptionFor = (item: CatalogItem) => language === 'en' ? item.description_en : item.description_pt;
 
@@ -250,9 +433,14 @@ function App() {
           <a className="product-image" href={`/product/${encodeURIComponent(item.id)}`} aria-label={nameFor(item)}>
             {productImage(item) ? <img src={productImage(item)} alt={nameFor(item)} style={productImageStyle(item)} loading="lazy" /> : <span className="image-placeholder">✦</span>}
             <span className="family-chip">{familyName(item.family, language)}</span>
+            <span className="product-image-mark" aria-hidden="true">↗</span>
           </a>
           <div className="product-copy">
             <span className="product-code">{item.id}</span>
+            <div className="product-taxonomy">
+              {collectionForItem(item) && <a href={`/shop?collection=${encodeURIComponent(collectionForItem(item)!.id)}`}>{collectionNameFor(collectionForItem(item)!)}</a>}
+              {item.category && <span>{categoryNameFor(item.category)}</span>}
+            </div>
             <h3><a href={`/product/${encodeURIComponent(item.id)}`}>{nameFor(item)}</a></h3>
             <p>{descriptionFor(item)}</p>
             <div className="product-bottom">
@@ -290,7 +478,7 @@ function App() {
             <div className="orbit orbit-two" />
             <div className="gift-box"><span className="gift-ribbon" /><span className="gift-bow">✦</span></div>
             <span className="spark spark-one">✦</span><span className="spark spark-two">✧</span><span className="spark spark-three">✳</span>
-            <span className="hero-note">made<br />for you</span>
+            <span className="hero-note">{t.madeForYou}</span>
           </div>
           <div className="hero-swoosh" />
         </section>
@@ -301,39 +489,57 @@ function App() {
             <h2>{t.introTitle}</h2>
             <p>{t.introBody}</p>
           </div>
-          <div className="intro-pills"><span>PLAY</span><span>HOME</span><span>BUSINESS</span></div>
+          <div className="intro-pills"><span>{t.play}</span><span>{t.home}</span><span>{t.business}</span></div>
         </section>
         <section className="section section-tint">
           <div className="section-heading section-heading-row">
-            <div><span className="eyebrow eyebrow-coral">A WORLD OF POSSIBILITIES</span><h2>{t.collectionTitle}</h2><p>{t.collectionBody}</p></div>
+            <div><span className="eyebrow eyebrow-coral">{t.possibleWorlds}</span><h2>{t.collectionTitle}</h2><p>{t.collectionBody}</p></div>
             <a className="text-link" href="/shop">{t.browse} <span aria-hidden="true">↗</span></a>
           </div>
           {catalogNotice}
           {catalogState === 'ready' && (
             <div className="collection-grid">
-              {catalog.collections.map((collection, index) => (
-                <a className={`collection-card collection-${index % 3}`} href={`/shop?collection=${encodeURIComponent(collection.id)}`} key={collection.id}>
-                  {collection.image_url && <img src={collection.image_url} alt="" style={getCatalogImageCropStyle(collection.image_crop)} loading="lazy" />}
-                  <span className="collection-overlay" />
-                  <span className="collection-copy">
-                    <small>{familyName(collection.family, language)}</small>
-                    <strong>{language === 'en' ? collection.name_en : collection.name_pt}</strong>
-                    <span>{language === 'en' ? collection.tagline_en : collection.tagline_pt}</span>
-                  </span>
-                  <span className="collection-arrow" aria-hidden="true">↗</span>
-                </a>
-              ))}
-              {!catalog.collections.length && <p className="notice">{t.empty}</p>}
+              {worlds.map(({ family, featuredItem }, index) => {
+                const giftCount = catalog.items.filter((item) => item.family === family).length;
+                const countLabel = language === 'en'
+                  ? giftCount === 1 ? 'active gift to explore' : 'active gifts to explore'
+                  : giftCount === 1 ? 'presente ativo para explorar' : 'presentes ativos para explorar';
+                return (
+                  <a className={`collection-card collection-${index}`} href={`/shop?family=${family}`} key={family}>
+                    {featuredItem && (
+                      <>
+                        <img className="collection-image-backdrop" src={productImage(featuredItem)} alt="" aria-hidden="true" style={productImageStyle(featuredItem)} loading="lazy" />
+                        <img className="collection-image-main" src={productImage(featuredItem)} alt="" aria-hidden="true" style={productImageStyle(featuredItem)} loading="lazy" />
+                      </>
+                    )}
+                    <span className="collection-overlay" />
+                    <span className="collection-copy">
+                      <small>{language === 'en' ? 'DISCOVER OUR WORLD' : 'DESCUBRA O NOSSO MUNDO'}</small>
+                      <strong>{familyName(family, language)}</strong>
+                      <span>{giftCount} {countLabel}</span>
+                    </span>
+                    <span className="collection-arrow" aria-hidden="true">↗</span>
+                  </a>
+                );
+              })}
             </div>
           )}
         </section>
-        <section className="section">
-          <div className="section-heading section-heading-row">
-            <div><span className="eyebrow eyebrow-coral">CHOSEN WITH CARE</span><h2>{t.popularTitle}</h2><p>{t.productsBody}</p></div>
-            <a className="text-link" href="/shop">{t.shop} <span aria-hidden="true">↗</span></a>
+        <section className="section discovery-moment">
+          <div className="section-heading">
+            <span className="eyebrow eyebrow-coral">{t.momentEyebrow}</span>
+            <h2>{t.momentTitle}</h2>
+            <p>{t.momentBody}</p>
           </div>
-          {catalogNotice}
-          {catalogState === 'ready' && (catalog.items.length ? renderCards(catalog.items.slice(0, 3)) : <p className="notice">{t.empty}</p>)}
+          <div className="moment-grid">
+            {t.momentSteps.map(([title, description], index) => (
+              <article className="moment-step" key={title}>
+                <span className="moment-number">0{index + 1}</span>
+                <h3>{title}</h3>
+                <p>{description}</p>
+              </article>
+            ))}
+          </div>
         </section>
         <section className="builder-banner">
           <div className="builder-star" aria-hidden="true">✦</div>
@@ -343,36 +549,159 @@ function App() {
       </>
     );
   } else if (path === '/shop' || path.startsWith('/shop/')) {
-    const familyParam = new URLSearchParams(window.location.search).get('family');
-    const collectionParam = new URLSearchParams(window.location.search).get('collection');
-    const [family] = [familyParam && ['PLAY', 'HOME', 'BUSINESS'].includes(familyParam) ? familyParam : 'ALL'];
+    const familyParam = currentLocation.searchParams.get('family');
+    const collectionParam = currentLocation.searchParams.get('collection');
+    const categoryParam = currentLocation.searchParams.get('category');
     const selectedCollection = catalog.collections.find((item) => item.id === collectionParam);
-    const visible = selectedCollection
-      ? catalog.items.filter((item) =>
-        item.family === selectedCollection.family &&
-        [selectedCollection.id, selectedCollection.name_en, selectedCollection.name_pt].includes(item.collection),
-      )
-      : family === 'ALL' ? catalog.items : catalog.items.filter((item) => item.family === family);
+    const family = familyParam === 'PLAY' || familyParam === 'HOME' || familyParam === 'BUSINESS'
+      ? familyParam
+      : selectedCollection?.family || 'ALL';
+    const familyItems = family === 'ALL'
+      ? catalog.items
+      : catalog.items.filter((item) => item.family === family);
+    const collectionItems = selectedCollection
+      ? familyItems.filter((item) => collectionForItem(item)?.id === selectedCollection.id)
+      : familyItems;
+    const visible = categoryParam
+      ? collectionItems.filter((item) => item.category === categoryParam)
+      : collectionItems;
+    const availableCategories = [...new Set(familyItems.map((item) => item.category).filter((category): category is string => Boolean(category)))];
+    const availableCollections = catalog.collections.filter((collection) =>
+      (family === 'ALL' || collection.family === family) &&
+      familyItems.some((item) => collectionForItem(item)?.id === collection.id),
+    );
+    const pageTitle = selectedCollection
+      ? collectionNameFor(selectedCollection)
+      : categoryParam && family !== 'ALL'
+        ? categoryNameFor(categoryParam)
+        : family === 'ALL'
+          ? t.shop
+          : familyName(family, language);
     page = (
-      <section className="section page-section">
-        <div className="page-heading"><span className="eyebrow eyebrow-coral">{t.navShop}</span><h1>{selectedCollection ? (language === 'en' ? selectedCollection.name_en : selectedCollection.name_pt) : t.shop}</h1><p>{selectedCollection ? (language === 'en' ? selectedCollection.tagline_en : selectedCollection.tagline_pt) || t.productsBody : t.productsBody}</p></div>
-        <div className="filter-row">
-          {[['ALL', t.all], ['PLAY', t.play], ['HOME', t.home], ['BUSINESS', t.business]].map(([value, label]) => (
-            <a className={`filter-chip ${(family === value) ? 'filter-active' : ''}`} href={value === 'ALL' ? '/shop' : `/shop?family=${value}`} key={value}>{label}</a>
-          ))}
+      <section className="section page-section shop-layout">
+        <div className="shop-main">
+          <div className="shop-intro">
+            <div className="page-heading">
+              <span className="eyebrow eyebrow-coral">{t.navShop}</span>
+              <h1>{pageTitle}</h1>
+              <p>{selectedCollection ? (language === 'en' ? selectedCollection.tagline_en : selectedCollection.tagline_pt) || t.productsBody : t.productsBody}</p>
+              {catalogState === 'ready' && <span className="results-count">{t.results} {visible.length} {t.itemsCount(visible.length)}</span>}
+            </div>
+            {availableCategories.length > 0 && (
+              <div className="taxonomy-filter-group shop-category-filter">
+                <span className="taxonomy-filter-label">{t.categoryLabel}</span>
+                <div className="filter-row taxonomy-filter-row">
+                  {availableCategories.map((category) => {
+                    const categoryName = categoryNameFor(category);
+                    return (
+                      <a
+                        className={`filter-chip${categoryParam === category ? ' filter-active' : ''}`}
+                        href={categoryParam === category
+                          ? (family === 'ALL' ? '/shop' : `/shop?family=${family}${selectedCollection ? `&collection=${encodeURIComponent(selectedCollection.id)}` : ''}`)
+                          : `/shop?${family === 'ALL' ? '' : `family=${family}&`}${selectedCollection ? `collection=${encodeURIComponent(selectedCollection.id)}&` : ''}category=${encodeURIComponent(category)}`}
+                        key={category}
+                      >
+                        {categoryName}
+                      </a>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+          <aside className="shop-sidebar">
+            <nav className="shop-side-navigation" aria-label={t.navShop}>
+              <a className={`shop-side-link${family === 'ALL' && !selectedCollection && !categoryParam ? ' shop-side-active' : ''}`} href="/shop">
+                {t.all}
+              </a>
+              {(['PLAY', 'HOME', 'BUSINESS'] as const).map((world) => (
+                <div className="shop-side-world" key={world}>
+                  <a
+                    className={`shop-side-link${family === world ? ' shop-side-active' : ''}`}
+                    href={`/shop?family=${world}`}
+                    aria-current={family === world ? 'page' : undefined}
+                  >
+                    {familyName(world, language)}
+                    <span aria-hidden="true">›</span>
+                  </a>
+                  {family === world && availableCollections.length > 0 && (
+                    <div className="shop-side-collections">
+                      <span className="taxonomy-filter-label">{t.collectionLabel}</span>
+                      {availableCollections.map((collection) => (
+                        <a
+                          className={`shop-side-collection${selectedCollection?.id === collection.id ? ' shop-side-collection-active' : ''}`}
+                          href={`/shop?family=${world}&collection=${encodeURIComponent(collection.id)}`}
+                          key={collection.id}
+                          aria-current={selectedCollection?.id === collection.id ? 'page' : undefined}
+                        >
+                          {collectionNameFor(collection)}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </nav>
+          </aside>
+          <div className="shop-results">
+            {catalogNotice}
+            {catalogState === 'ready' && (visible.length ? renderCards(visible) : <p className="notice">{t.empty}</p>)}
+          </div>
         </div>
-        {catalogNotice}
-        {catalogState === 'ready' && (visible.length ? renderCards(visible) : <p className="notice">{t.empty}</p>)}
       </section>
     );
   } else if (path.startsWith('/product/')) {
+    const productImages = selectedItem?.images?.filter(Boolean) || [];
+    const primaryIndex = selectedItem
+      ? Math.max(0, Math.min(selectedItem.primary_image_index || 0, productImages.length - 1))
+      : 0;
+    const activeImageIndex = productImages.length
+      ? (selectedProductImages[selectedItemId] ?? primaryIndex)
+      : 0;
+    const activeImage = productImages[activeImageIndex];
+    const activeImageStyle = selectedItem ? imageStyle(selectedItem, activeImageIndex) : undefined;
     page = selectedItem ? (
       <section className="section product-detail page-section">
         <a className="text-link back-link" href="/shop">← {t.backShop}</a>
         <div className="detail-grid">
-          <div className="detail-image">{productImage(selectedItem) ? <img src={productImage(selectedItem)} alt={nameFor(selectedItem)} style={productImageStyle(selectedItem)} /> : <span className="image-placeholder">✦</span>}</div>
+          <div className="detail-gallery">
+            <div className="detail-image">
+              {activeImage
+                ? <img src={activeImage} alt={`${nameFor(selectedItem)} — ${t.imageNumber(activeImageIndex + 1, productImages.length)}`} style={activeImageStyle} />
+                : <span className="image-placeholder">✦</span>}
+              {productImages.length > 1 && (
+                <span className="gallery-count" aria-live="polite">{t.imageNumber(activeImageIndex + 1, productImages.length)}</span>
+              )}
+            </div>
+            {productImages.length > 1 && (
+              <div className="detail-thumbnails" role="group" aria-label={nameFor(selectedItem)}>
+                {productImages.map((image, index) => (
+                  <button
+                    className={`detail-thumbnail${index === activeImageIndex ? ' thumbnail-active' : ''}`}
+                    type="button"
+                    key={`${selectedItem.id}-${image}`}
+                    aria-label={t.imageNumber(index + 1, productImages.length)}
+                    aria-pressed={index === activeImageIndex}
+                    onClick={() => selectProductImage(selectedItem, index)}
+                  >
+                    <img src={image} alt="" loading="lazy" />
+                  </button>
+                ))}
+              </div>
+            )}
+            {productImages.length > 1 && (
+              <div className="gallery-controls">
+                <button type="button" className="gallery-arrow" aria-label={t.previousImage} onClick={() => selectProductImage(selectedItem, (activeImageIndex - 1 + productImages.length) % productImages.length)}>←</button>
+                <button type="button" className="gallery-arrow" aria-label={t.nextImage} onClick={() => selectProductImage(selectedItem, (activeImageIndex + 1) % productImages.length)}>→</button>
+              </div>
+            )}
+          </div>
           <div className="detail-copy">
             <span className="eyebrow eyebrow-coral">{familyName(selectedItem.family, language)} · {selectedItem.id}</span>
+            <div className="detail-taxonomy">
+              {collectionForItem(selectedItem) && <a href={`/shop?collection=${encodeURIComponent(collectionForItem(selectedItem)!.id)}`}>{collectionNameFor(collectionForItem(selectedItem)!)}</a>}
+              {selectedItem.category && <a href={`/shop?family=${selectedItem.family}&category=${encodeURIComponent(selectedItem.category)}`}>{categoryNameFor(selectedItem.category)}</a>}
+            </div>
             <h1>{nameFor(selectedItem)}</h1>
             <p>{descriptionFor(selectedItem)}</p>
             <strong className="detail-price">{selectedItem.price_mzn != null ? `${Number(selectedItem.price_mzn).toLocaleString(language === 'pt' ? 'pt-MZ' : 'en-US')} MZN` : t.noPrice}</strong>
@@ -384,13 +713,80 @@ function App() {
     ) : catalogState === 'loading' ? <section className="section page-section">{catalogNotice}</section>
       : <section className="section page-section"><p className="notice">{catalogState === 'error' ? t.catalogError : t.notFound}</p></section>;
   } else if (path === '/gift-builder') {
-    page = <GiftBuilder catalog={catalog} catalogState={catalogState} language={language} t={t} nameFor={nameFor} descriptionFor={descriptionFor} productImage={productImage} productImageStyle={productImageStyle} />;
+    page = <GiftBuilder catalog={catalog} catalogState={catalogState} language={language} t={t} nameFor={nameFor} descriptionFor={descriptionFor} productImage={productImage} productImageStyle={productImageStyle} initialProduct={currentLocation.searchParams.get('product') || ''} />;
   } else if (path === '/corporate') {
-    page = <section className="section content-page"><span className="eyebrow eyebrow-coral">{t.navCorporate}</span><h1>{t.corporateTitle}</h1><p>{t.corporateBody}</p><a className="button button-primary" href="/gift-builder">{t.create}<span aria-hidden="true">↗</span></a></section>;
+    const businessCollections = catalog.collections.filter((collection) => collection.family === 'BUSINESS');
+    page = (
+      <section className="section content-page editorial-page">
+        <span className="eyebrow eyebrow-coral">{t.navCorporate}</span>
+        <h1>{t.corporateTitle}</h1>
+        <p>{t.corporateBody}</p>
+        <p>{t.businessCollections}</p>
+        {businessCollections.length > 0 && <div className="editorial-collections">{businessCollections.map((collection) => (
+          <a className="editorial-collection" href={`/shop?collection=${encodeURIComponent(collection.id)}`} key={collection.id}>
+            <span>{collectionNameFor(collection)}</span>
+            <strong>{language === 'en' ? collection.tagline_en : collection.tagline_pt}</strong>
+            <span aria-hidden="true">↗</span>
+          </a>
+        ))}</div>}
+        <a className="button button-primary" href="/gift-builder">{t.create}<span aria-hidden="true">↗</span></a>
+      </section>
+    );
   } else if (path === '/about') {
-    page = <section className="section content-page"><span className="eyebrow eyebrow-coral">THE DISCOVERY BOX</span><h1>{t.aboutTitle}</h1><p>{t.aboutBody}</p><div className="about-colors"><i /><i /><i /><i /><i /></div><a className="button button-primary" href="/shop">{t.browse}</a></section>;
+    page = (
+      <section className="section content-page about-page">
+        <div className="about-lead">
+          <span className="eyebrow eyebrow-coral">THE DISCOVERY BOX</span>
+          <h1>{t.aboutTitle}</h1>
+          <p>{t.aboutBody}</p>
+          <strong className="brand-feeling">{t.brandFeeling}</strong>
+          <a className="button button-primary" href="/shop">{t.browse}<span aria-hidden="true">↗</span></a>
+        </div>
+        <div className="about-story">
+          <article><span>01 / {language === 'en' ? 'WHAT WE MAKE' : 'O QUE CRIAMOS'}</span><p>{t.whatWeMake}</p></article>
+          <article><span>02 / {language === 'en' ? 'WHY WE MAKE IT' : 'PORQUE CRIAMOS'}</span><p>{t.whyWeMake}</p></article>
+          <article><span>03 / {language === 'en' ? 'HOW WE DO IT' : 'COMO FAZEMOS'}</span><p>{t.howWeMake}</p></article>
+        </div>
+        <div className="values-section">
+          <span className="eyebrow eyebrow-coral">{t.aboutValues}</span>
+          <h2>{t.valuesTitle}</h2>
+          <div className="values-grid">{t.values.map(([name, description], index) => (
+            <article className="value-card" key={name}><span>0{index + 1}</span><h3>{name}</h3><p>{description}</p></article>
+          ))}</div>
+        </div>
+      </section>
+    );
   } else if (path === '/contact') {
-    page = <section className="section content-page"><span className="eyebrow eyebrow-coral">{t.navContact}</span><h1>{t.contactTitle}</h1><p>{t.contactBody}</p><div className="contact-links">{contact.email && <a className="button button-outline" href={`mailto:${contact.email}`}>{contact.email}</a>}{contact.whatsapp && <a className="button button-primary" href={contact.whatsapp} target="_blank" rel="noreferrer">WhatsApp ↗</a>}</div>{!contact.email && !contact.whatsapp && <p className="notice">{t.contactOptions}</p>}<a className="text-link" href="/gift-builder">{t.create} ↗</a></section>;
+    page = (
+      <section className="section content-page contact-page">
+        <div className="contact-intro">
+          <span className="eyebrow eyebrow-coral">{t.navContact}</span>
+          <h1>{t.contactTitle}</h1>
+          <p>{t.contactBody}</p>
+          <div className="contact-links">
+            {contact.email && <a className="button button-outline" href={`mailto:${contact.email}`}>{contact.email}</a>}
+            {contact.whatsapp && <a className="button button-primary" href={contact.whatsapp} target="_blank" rel="noreferrer">WhatsApp ↗</a>}
+          </div>
+          {!contact.email && !contact.whatsapp && <p className="notice">{t.contactOptions}</p>}
+        </div>
+        <aside className="instagram-card" aria-labelledby="instagram-title">
+          <div className="instagram-copy">
+            <span className="instagram-kicker"><span aria-hidden="true">◎</span> INSTAGRAM</span>
+            <h2 id="instagram-title">{t.instagramTitle}</h2>
+            <p>{t.instagramBody}</p>
+            <a className="instagram-handle" href="https://www.instagram.com/the_discoverybox/" target="_blank" rel="noreferrer">
+              @the_discoverybox <span aria-hidden="true">↗</span>
+            </a>
+          </div>
+          <a className="instagram-qr" href="https://www.instagram.com/the_discoverybox/" target="_blank" rel="noreferrer" aria-label={`${t.instagramScan}: @the_discoverybox`}>
+            <img src="/instagram-qr.png" alt={t.instagramQrAlt} />
+            <span>{t.instagramScan}</span>
+          </a>
+          <span className="instagram-spark instagram-spark-one" aria-hidden="true">✦</span>
+          <span className="instagram-spark instagram-spark-two" aria-hidden="true">✧</span>
+        </aside>
+      </section>
+    );
   } else if (path === '/privacy') {
     page = <section className="section content-page"><span className="eyebrow eyebrow-coral">{t.privacy}</span><h1>{t.privacyTitle}</h1><p>{t.privacyBody}</p><p className="muted">{t.contactOptions}</p></section>;
   } else if (path === '/terms') {
@@ -400,18 +796,36 @@ function App() {
   }
 
   return (
-    <div className="site-shell">
+    <div className="site-shell" onClick={handleInternalNavigation}>
       <header className="site-header">
         <a className="brand" href="/" aria-label="The Discovery Box home"><img src="/official-logo.png" alt="The Discovery Box" /></a>
-        <nav className="main-nav" aria-label={language === 'en' ? 'Main navigation' : 'Navegação principal'}>
-          <a href="/shop">{t.navShop}</a><a href="/gift-builder">{t.navBuilder}</a><a href="/corporate">{t.navCorporate}</a><a href="/about">{t.navAbout}</a><a href="/contact">{t.navContact}</a>
+        <nav className={`main-nav${mobileMenuOpen ? ' nav-open' : ''}`} aria-label={language === 'en' ? 'Main navigation' : 'Navegação principal'}>
+          <a href="/shop" onClick={() => setMobileMenuOpen(false)}>{t.navShop}</a><a href="/gift-builder" onClick={() => setMobileMenuOpen(false)}>{t.navBuilder}</a><a href="/corporate" onClick={() => setMobileMenuOpen(false)}>{t.navCorporate}</a><a href="/about" onClick={() => setMobileMenuOpen(false)}>{t.navAbout}</a><a href="/contact" onClick={() => setMobileMenuOpen(false)}>{t.navContact}</a>
         </nav>
         <div className="header-actions">
-          <div className="language-switch" aria-label="Language">
+          <button
+            className="menu-toggle"
+            type="button"
+            aria-label={mobileMenuOpen ? t.menuClose : t.menu}
+            aria-expanded={mobileMenuOpen}
+            onClick={() => setMobileMenuOpen((open) => !open)}
+          >
+            <span /><span /><span />
+          </button>
+          <div className="language-switch" aria-label={t.languageLabel}>
             <button type="button" onClick={() => setLanguage('en')} aria-pressed={language === 'en'}>EN</button>
             <span>/</span>
             <button type="button" onClick={() => setLanguage('pt')} aria-pressed={language === 'pt'}>PT</button>
           </div>
+          <button
+            className="theme-toggle"
+            type="button"
+            aria-label={theme === 'dark' ? t.themeLight : t.themeDark}
+            title={theme === 'dark' ? t.themeLight : t.themeDark}
+            onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')}
+          >
+            <span aria-hidden="true">{theme === 'dark' ? '☼' : '☾'}</span>
+          </button>
           <a className="header-cta" href="/gift-builder">{t.create}<span aria-hidden="true">↗</span></a>
         </div>
       </header>
@@ -425,7 +839,7 @@ function App() {
 }
 
 function GiftBuilder({
-  catalog, catalogState, language, t, nameFor, descriptionFor, productImage, productImageStyle,
+  catalog, catalogState, language, t, nameFor, descriptionFor, productImage, productImageStyle, initialProduct,
 }: {
   catalog: CatalogResponse;
   catalogState: 'loading' | 'ready' | 'error';
@@ -435,8 +849,8 @@ function GiftBuilder({
   descriptionFor: (item: CatalogItem) => string;
   productImage: (item: CatalogItem) => string;
   productImageStyle: (item: CatalogItem) => CSSProperties;
+  initialProduct: string;
 }) {
-  const initialProduct = new URLSearchParams(window.location.search).get('product') || '';
   const [step, setStep] = useState(1);
   const [selected, setSelected] = useState<string[]>(initialProduct ? [initialProduct] : []);
   const [occasion, setOccasion] = useState('');

@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import path from 'node:path';
 import fs from 'node:fs';
 import express from 'express';
@@ -49,6 +50,21 @@ function getPublicSupabase() {
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
+export function toPublicCatalogImageUrl(imageUrl: string, supabaseUrl: string): string {
+  const queryIndex = imageUrl.indexOf('?');
+  const imagePath = queryIndex === -1 ? imageUrl : imageUrl.slice(0, queryIndex);
+  const match = /^\/api\/storage\/catalog-items\/(.+)$/.exec(imagePath);
+  if (!match) return imageUrl;
+
+  const objectPath = match[1].replace(/#/g, '%23');
+  const publicUrl = new URL(
+    `/storage/v1/object/public/catalog-items/${objectPath}`,
+    `${supabaseUrl.replace(/\/+$/, '')}/`,
+  );
+  if (queryIndex !== -1) publicUrl.search = imageUrl.slice(queryIndex + 1);
+  return publicUrl.toString();
+}
+
 function isText(value: unknown, max: number): value is string {
   return typeof value === 'string' && value.length <= max;
 }
@@ -88,8 +104,21 @@ app.get('/api/catalog', async (_req, res) => {
     res.status(502).json({ error: 'The public catalogue is temporarily unavailable.' });
     return;
   }
+  const storageBaseUrl = process.env.SUPABASE_URL?.trim();
+  const resolveImage = (imageUrl: string) => storageBaseUrl
+    ? toPublicCatalogImageUrl(imageUrl, storageBaseUrl)
+    : imageUrl;
   res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
-  res.json({ items: items.data || [], collections: collections.data || [] });
+  res.json({
+    items: (items.data || []).map((item) => ({
+      ...item,
+      images: item.images?.map(resolveImage) || [],
+    })),
+    collections: (collections.data || []).map((collection) => ({
+      ...collection,
+      image_url: collection.image_url ? resolveImage(collection.image_url) : '',
+    })),
+  });
 });
 
 app.post('/api/enquiries', rateLimit(5, 15 * 60 * 1000), async (req, res) => {
