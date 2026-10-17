@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState, type CSSProperties, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react';
 
 type Language = 'en' | 'pt';
 type Theme = 'light' | 'dark';
@@ -110,6 +110,7 @@ const copy = {
     empty: 'Our collection is being prepared. Please check back soon.',
     catalogError: 'We could not load the catalogue right now. Please try again shortly.',
     loading: 'Finding thoughtful things…',
+    loadingHint: 'Getting everything ready for you',
     requestQuote: 'Ask about this gift',
     buildWith: 'Build a gift around this',
     imageNumber: (current: number, total: number) => `Image ${current} of ${total}`,
@@ -246,6 +247,7 @@ const copy = {
     empty: 'Estamos a preparar a coleção. Volte em breve.',
     catalogError: 'Não foi possível carregar o catálogo. Tente novamente dentro de alguns instantes.',
     loading: 'A encontrar presentes especiais…',
+    loadingHint: 'A preparar tudo para si',
     requestQuote: 'Perguntar sobre este presente',
     buildWith: 'Criar um presente a partir deste',
     imageNumber: (current: number, total: number) => `Imagem ${current} de ${total}`,
@@ -347,6 +349,10 @@ function App() {
     };
     window.addEventListener('popstate', syncLocation);
     return () => window.removeEventListener('popstate', syncLocation);
+  }, []);
+
+  useLayoutEffect(() => {
+    document.getElementById('startup-loader')?.remove();
   }, []);
 
   const handleInternalNavigation = (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -837,6 +843,18 @@ function App() {
 
   return (
     <div className="site-shell" onClick={handleInternalNavigation}>
+      {catalogState === 'loading' && (
+        <div className="startup-loader" role="status" aria-live="polite">
+          <div className="startup-loader-card">
+            <img src="/official-logo.png" alt="The Discovery Box" />
+            <strong>{t.loadingHint}</strong>
+            <p>{t.loading}</p>
+            <div className="startup-loader-track" role="progressbar" aria-label={t.loading} aria-valuetext={t.loading}>
+              <div className="startup-loader-bar" />
+            </div>
+          </div>
+        </div>
+      )}
       <header className="site-header">
         <a className="brand" href="/" aria-label="The Discovery Box home">
           <img src="/official-logo.png" alt="" />

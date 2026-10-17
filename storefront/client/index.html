@@ -16,8 +16,61 @@
         console.warn('Could not restore the saved theme before page render', error);
       }
     </script>
+    <style>
+      #startup-loader {
+        position: fixed;
+        z-index: 9999;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: radial-gradient(ellipse at 50% 38%, #ffffff 0%, #fff9f4 55%, #f7f3ee 100%);
+        color: #102b56;
+        font-family: "DM Sans", Arial, sans-serif;
+      }
+      #startup-loader-card {
+        width: min(100%, 390px);
+        padding: 34px 32px 30px;
+        border: 1px solid #ffffff;
+        border-radius: 28px;
+        background: #ffffffb8;
+        box-shadow: 0 28px 90px #102b5614, inset 0 1px #ffffff;
+        text-align: center;
+        backdrop-filter: blur(18px);
+      }
+      #startup-loader img { display: block; width: 190px; height: 132px; margin: 0 auto 14px; object-fit: contain; }
+      #startup-loader strong { display: block; font-size: 17px; font-weight: 700; letter-spacing: -.03em; }
+      #startup-loader p { margin: 7px 0 22px; color: #52647b; font-size: 12px; }
+      #startup-loader-track { height: 5px; overflow: hidden; border-radius: 99px; background: #e8efed; }
+      #startup-loader-bar {
+        width: 42%;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #27c6be, #72dfc8, #ffbe2e);
+        animation: startup-progress 1.35s cubic-bezier(.6, 0, .4, 1) infinite;
+      }
+      @keyframes startup-progress {
+        0% { transform: translateX(-115%); }
+        100% { transform: translateX(255%); }
+      }
+      html[data-theme="dark"] #startup-loader { background: radial-gradient(ellipse at 50% 38%, #202d32, #101820 72%); color: #f2f6f4; }
+      html[data-theme="dark"] #startup-loader-card { border-color: #ffffff12; background: #ffffff08; box-shadow: 0 28px 90px #0005, inset 0 1px #ffffff10; }
+      html[data-theme="dark"] #startup-loader p { color: #c1ced0; }
+      html[data-theme="dark"] #startup-loader-track { background: #ffffff18; }
+      @media (prefers-reduced-motion: reduce) { #startup-loader-bar { width: 100%; animation: none; } }
+    </style>
   </head>
   <body>
+    <div id="startup-loader" role="status" aria-live="polite">
+      <div id="startup-loader-card">
+        <img src="/official-logo.png" alt="The Discovery Box" />
+        <strong>Getting everything ready</strong>
+        <p>Preparing your next discovery…</p>
+        <div id="startup-loader-track" role="progressbar" aria-label="Loading" aria-valuetext="Loading">
+          <div id="startup-loader-bar"></div>
+        </div>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
