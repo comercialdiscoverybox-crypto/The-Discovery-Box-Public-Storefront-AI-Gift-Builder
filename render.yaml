@@ -3,7 +3,7 @@ services:
     name: the-discovery-box-storefront
     runtime: node
     plan: free
-    buildCommand: npm ci && npm run build:storefront
+    buildCommand: npm ci --include=dev && npm run build:storefront
     startCommand: npm run start:storefront
     healthCheckPath: /api/health
     envVars:

@@ -7,7 +7,7 @@ This is a separate, bilingual public website and Render web service. It does not
 From the repository root:
 
 ```sh
-npm ci
+npm ci --include=dev
 npm run dev:storefront
 ```
 

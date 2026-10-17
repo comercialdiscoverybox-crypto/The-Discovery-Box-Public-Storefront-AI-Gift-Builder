@@ -29,7 +29,7 @@ Configure only the Supabase URL and publishable key on this service. **Never con
 
 The [`render.yaml`](./render.yaml) blueprint defines a separate free-plan Node.js storefront service:
 
-- Build: `npm ci && npm run build:storefront`
+- Build: `npm ci --include=dev && npm run build:storefront`
 - Start: `npm run start:storefront`
 - Required environment: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`
 
