@@ -55,7 +55,6 @@ const copy = {
     collectionTitle: 'Explore our worlds',
     collectionBody: 'A little something for play, home and the people you work with.',
     collectionBrowse: 'Explore collections',
-    categoryLabel: 'Browse by category',
     collectionLabel: 'Collections',
     categoryPlay: 'Toys & Creative Figures',
     categoryHome: 'Creative & Functional Objects',
@@ -86,7 +85,6 @@ const copy = {
     aboutValues: 'What we believe',
     collectionFor: (name: string) => `Explore ${name}`,
     categoryFilter: 'Categories',
-    results: 'Showing',
     menuClose: 'Close navigation menu',
     languageLabel: 'Language',
     pageTitle: 'The Discovery Box — Gifts with a little more meaning',
@@ -138,7 +136,7 @@ const copy = {
     disclaimer: 'This image is an illustration, not a photo of the finished gift. Final contents, personalization, price and delivery are confirmed by The Discovery Box.',
     privacy: 'Privacy',
     terms: 'Terms',
-    footer: 'Thoughtfully made in Mozambique.',
+    footer: 'Thoughtful gifts, playful objects and original 3D creations—made with care in Mozambique to turn everyday moments into personal discoveries.',
     corporateTitle: 'Thoughtful gifting for teams, clients and celebrations.',
     corporateBody: 'From a few meaningful thank-yous to a company-wide celebration, tell us what you have in mind and our team will help shape it.',
     aboutTitle: 'The joy is in the discovery.',
@@ -182,7 +180,6 @@ const copy = {
     collectionTitle: 'Explore os nossos mundos',
     collectionBody: 'Ideias para brincar, para a casa e para as pessoas com quem trabalha.',
     collectionBrowse: 'Explore as coleções',
-    categoryLabel: 'Explore por categoria',
     collectionLabel: 'Coleções',
     categoryPlay: 'Brinquedos e Figuras Criativas',
     categoryHome: 'Objetos Criativos e Funcionais',
@@ -213,7 +210,6 @@ const copy = {
     aboutValues: 'No que acreditamos',
     collectionFor: (name: string) => `Explore ${name}`,
     categoryFilter: 'Categorias',
-    results: 'A mostrar',
     menuClose: 'Fechar menu de navegação',
     languageLabel: 'Idioma',
     pageTitle: 'The Discovery Box — Presentes com significado',
@@ -265,7 +261,7 @@ const copy = {
     disclaimer: 'Esta imagem é uma ilustração, não uma fotografia do presente final. Os conteúdos, a personalização, o preço e a entrega são confirmados pela The Discovery Box.',
     privacy: 'Privacidade',
     terms: 'Termos',
-    footer: 'Feito com carinho em Moçambique.',
+    footer: 'Presentes especiais, objetos divertidos e criações 3D originais, feitos com carinho em Moçambique para transformar momentos comuns em descobertas pessoais.',
     corporateTitle: 'Presentes especiais para equipas, clientes e celebrações.',
     corporateBody: 'De alguns agradecimentos a uma celebração para toda a empresa, conte-nos a sua ideia e a nossa equipa ajudará a desenvolvê-la.',
     aboutTitle: 'A alegria está na descoberta.',
@@ -489,7 +485,6 @@ function App() {
             <h2>{t.introTitle}</h2>
             <p>{t.introBody}</p>
           </div>
-          <div className="intro-pills"><span>{t.play}</span><span>{t.home}</span><span>{t.business}</span></div>
         </section>
         <section className="section section-tint">
           <div className="section-heading section-heading-row">
@@ -505,20 +500,19 @@ function App() {
                   ? giftCount === 1 ? 'active gift to explore' : 'active gifts to explore'
                   : giftCount === 1 ? 'presente ativo para explorar' : 'presentes ativos para explorar';
                 return (
-                  <a className={`collection-card collection-${index}`} href={`/shop?family=${family}`} key={family}>
-                    {featuredItem && (
-                      <>
-                        <img className="collection-image-backdrop" src={productImage(featuredItem)} alt="" aria-hidden="true" style={productImageStyle(featuredItem)} loading="lazy" />
-                        <img className="collection-image-main" src={productImage(featuredItem)} alt="" aria-hidden="true" style={productImageStyle(featuredItem)} loading="lazy" />
-                      </>
-                    )}
-                    <span className="collection-overlay" />
-                    <span className="collection-copy">
+                  <a className={`discovery-card collection-${index}`} href={`/shop?family=${family}`} key={family}>
+                    <span className="discovery-card__visual">
+                      {featuredItem && (
+                        <img className="discovery-card__image" src={productImage(featuredItem)} alt="" aria-hidden="true" style={productImageStyle(featuredItem)} loading="lazy" />
+                      )}
+                      <span className="collection-overlay" />
+                    </span>
+                    <span className="discovery-card__content">
                       <small>{language === 'en' ? 'DISCOVER OUR WORLD' : 'DESCUBRA O NOSSO MUNDO'}</small>
                       <strong>{familyName(family, language)}</strong>
                       <span>{giftCount} {countLabel}</span>
+                      <span className="collection-arrow" aria-hidden="true">↗</span>
                     </span>
-                    <span className="collection-arrow" aria-hidden="true">↗</span>
                   </a>
                 );
               })}
@@ -585,11 +579,9 @@ function App() {
               <span className="eyebrow eyebrow-coral">{t.navShop}</span>
               <h1>{pageTitle}</h1>
               <p>{selectedCollection ? (language === 'en' ? selectedCollection.tagline_en : selectedCollection.tagline_pt) || t.productsBody : t.productsBody}</p>
-              {catalogState === 'ready' && <span className="results-count">{t.results} {visible.length} {t.itemsCount(visible.length)}</span>}
             </div>
             {availableCategories.length > 0 && (
               <div className="taxonomy-filter-group shop-category-filter">
-                <span className="taxonomy-filter-label">{t.categoryLabel}</span>
                 <div className="filter-row taxonomy-filter-row">
                   {availableCategories.map((category) => {
                     const categoryName = categoryNameFor(category);
@@ -767,6 +759,9 @@ function App() {
             {contact.email && <a className="button button-outline" href={`mailto:${contact.email}`}>{contact.email}</a>}
             {contact.whatsapp && <a className="button button-primary" href={contact.whatsapp} target="_blank" rel="noreferrer">WhatsApp ↗</a>}
           </div>
+          <a className="contact-instagram" href="https://www.instagram.com/the_discoverybox/" target="_blank" rel="noreferrer">
+            <span aria-hidden="true">◎</span> @the_discoverybox <span aria-hidden="true">↗</span>
+          </a>
           {!contact.email && !contact.whatsapp && <p className="notice">{t.contactOptions}</p>}
         </div>
         <aside className="instagram-card" aria-labelledby="instagram-title">
@@ -783,7 +778,6 @@ function App() {
             <span>{t.instagramScan}</span>
           </a>
           <span className="instagram-spark instagram-spark-one" aria-hidden="true">✦</span>
-          <span className="instagram-spark instagram-spark-two" aria-hidden="true">✧</span>
         </aside>
       </section>
     );
@@ -831,7 +825,7 @@ function App() {
       </header>
       <main>{page}</main>
       <footer className="site-footer">
-        <div className="footer-top"><a className="brand brand-footer" href="/"><img src="/official-logo.png" alt="The Discovery Box" /></a><span>{t.footer}</span><a className="footer-cta" href="/gift-builder">{t.create} ↗</a></div>
+        <div className="footer-top"><a className="brand brand-footer" href="/"><img src="/official-logo.png" alt="The Discovery Box" /></a><span className="footer-description">{t.footer}</span></div>
         <div className="footer-bottom"><span>© {new Date().getFullYear()} The Discovery Box</span><div><a href="/privacy">{t.privacy}</a><a href="/terms">{t.terms}</a><a href="/contact">{t.navContact}</a></div></div>
       </footer>
     </div>
