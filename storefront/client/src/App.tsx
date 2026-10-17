@@ -33,20 +33,31 @@ type CatalogResponse = {
 
 const copy = {
   en: {
+    navHome: 'Home',
     navShop: 'Shop',
-    navBuilder: 'Build a gift',
+    navCollections: 'Collections',
+    navBuilder: 'Gift builder',
+    navIdeas: 'AI ideas',
     navCorporate: 'Corporate gifts',
-    navAbout: 'Our story',
+    navAbout: 'About',
     navContact: 'Contact',
+    searchGifts: 'Explore gifts',
+    giftBuilder: 'Open the gift builder',
     themeLight: 'Switch to light mode',
     themeDark: 'Switch to dark mode',
     menu: 'Open navigation menu',
+    browseCategories: 'Browse categories',
+    pagePrevious: 'Previous',
+    pageNext: 'Next',
+    paginationLabel: 'Product pages',
+    pageStatus: (current: number, total: number) => `Page ${current} of ${total}`,
     possibleWorlds: 'A world of possibilities',
     chosenWithCare: 'Chosen with care',
     madeForYou: <>made<br />for you</>,
-    heroEyebrow: 'A little wonder, thoughtfully wrapped',
-    heroTitle: 'Give them a moment they’ll remember.',
-    heroBody: 'Discover meaningful gifts and make every celebration feel like theirs.',
+    heroEyebrow: 'Personalized gifts for every moment',
+    heroTitle: <>More than gifts,<br />it’s a <span className="hero-title-highlight"><span>d</span><span>i</span><span>s</span><span>c</span><span>o</span><span>v</span><span>e</span><span>r</span><span>y</span></span><span className="hero-title-period">.</span></>,
+    heroBody: 'Explore unique products, create personalized gift ideas and make every moment extra special.',
+    heroCta: 'Start building',
     browse: 'Explore the collection',
     create: 'Create a gift',
     trusted: 'Thoughtful by nature. Personal by design.',
@@ -158,20 +169,31 @@ const copy = {
     businessCollections: 'Ideas for your brand, team and next big moment.',
   },
   pt: {
+    navHome: 'Início',
     navShop: 'Loja',
-    navBuilder: 'Criar presente',
+    navCollections: 'Coleções',
+    navBuilder: 'Criador de presentes',
+    navIdeas: 'Ideias com IA',
     navCorporate: 'Presentes empresariais',
-    navAbout: 'A nossa história',
+    navAbout: 'Sobre nós',
     navContact: 'Contacto',
+    searchGifts: 'Explorar presentes',
+    giftBuilder: 'Abrir criador de presentes',
     themeLight: 'Mudar para o modo claro',
     themeDark: 'Mudar para o modo escuro',
     menu: 'Abrir menu de navegação',
+    browseCategories: 'Explorar categorias',
+    pagePrevious: 'Anterior',
+    pageNext: 'Seguinte',
+    paginationLabel: 'Páginas de produtos',
+    pageStatus: (current: number, total: number) => `Página ${current} de ${total}`,
     possibleWorlds: 'Um mundo de possibilidades',
     chosenWithCare: 'Escolhido com carinho',
     madeForYou: <>feito<br />para si</>,
-    heroEyebrow: 'Um pouco de encanto, preparado com carinho',
-    heroTitle: 'Ofereça um momento inesquecível.',
-    heroBody: 'Descubra presentes especiais e torne cada celebração única.',
+    heroEyebrow: 'Presentes personalizados para cada momento',
+    heroTitle: <>Mais do que presentes,<br />uma&nbsp;<span className="hero-title-highlight"><span>d</span><span>e</span><span>s</span><span>c</span><span>o</span><span>b</span><span>e</span><span>r</span><span>t</span><span>a</span></span><span className="hero-title-period">.</span></>,
+    heroBody: 'Descubra produtos únicos, crie ideias de presentes personalizados e torne cada momento ainda mais especial.',
+    heroCta: 'Começar a criar',
     browse: 'Explorar a coleção',
     create: 'Criar um presente',
     trusted: 'Pensado com carinho. Feito à sua medida.',
@@ -286,11 +308,7 @@ const copy = {
 
 type TextKey = keyof typeof copy.en;
 
-const familyName = (family: CatalogItem['family'], language: Language) => ({
-  PLAY: language === 'en' ? 'PLAY' : 'BRINCAR',
-  HOME: language === 'en' ? 'HOME' : 'CASA',
-  BUSINESS: language === 'en' ? 'BUSINESS' : 'EMPRESAS',
-}[family]);
+const familyName = (family: CatalogItem['family']) => family;
 
 function readLanguagePreference(): Language {
   try {
@@ -428,7 +446,7 @@ function App() {
         <article className="product-card" key={item.id}>
           <a className="product-image" href={`/product/${encodeURIComponent(item.id)}`} aria-label={nameFor(item)}>
             {productImage(item) ? <img src={productImage(item)} alt={nameFor(item)} style={productImageStyle(item)} loading="lazy" /> : <span className="image-placeholder">✦</span>}
-            <span className="family-chip">{familyName(item.family, language)}</span>
+            <span className="family-chip">{familyName(item.family)}</span>
             <span className="product-image-mark" aria-hidden="true">↗</span>
           </a>
           <div className="product-copy">
@@ -465,18 +483,16 @@ function App() {
             <h1>{t.heroTitle}</h1>
             <p>{t.heroBody}</p>
             <div className="button-row">
-              <a className="button button-primary" href="/shop">{t.browse}<span aria-hidden="true">↗</span></a>
-              <a className="button button-light" href="/gift-builder">{t.create}</a>
+              <a className="button button-primary" href="/gift-builder">{t.heroCta}<span aria-hidden="true">→</span></a>
             </div>
           </div>
-          <div className="hero-art" aria-hidden="true">
-            <div className="orbit orbit-one" />
-            <div className="orbit orbit-two" />
-            <div className="gift-box"><span className="gift-ribbon" /><span className="gift-bow">✦</span></div>
-            <span className="spark spark-one">✦</span><span className="spark spark-two">✧</span><span className="spark spark-three">✳</span>
-            <span className="hero-note">{t.madeForYou}</span>
-          </div>
-          <div className="hero-swoosh" />
+          <img className="hero-artwork" src="/discovery-box-adventure.png" alt="" aria-hidden="true" />
+          <p className="hero-artwork-message">
+            <span>Small</span>
+            <span>surprises.</span>
+            <span>Big smiles.</span>
+            <span className="hero-artwork-heart" aria-hidden="true">♡</span>
+          </p>
         </section>
         <div className="trust-strip"><span>✦</span>{t.trusted}<span>✦</span></div>
         <section className="section section-intro">
@@ -509,7 +525,7 @@ function App() {
                     </span>
                     <span className="discovery-card__content">
                       <small>{language === 'en' ? 'DISCOVER OUR WORLD' : 'DESCUBRA O NOSSO MUNDO'}</small>
-                      <strong>{familyName(family, language)}</strong>
+                      <strong>{familyName(family)}</strong>
                       <span>{giftCount} {countLabel}</span>
                       <span className="collection-arrow" aria-hidden="true">↗</span>
                     </span>
@@ -559,6 +575,20 @@ function App() {
     const visible = categoryParam
       ? collectionItems.filter((item) => item.category === categoryParam)
       : collectionItems;
+    const productsPerPage = 6;
+    const pageCount = Math.max(1, Math.ceil(visible.length / productsPerPage));
+    const requestedPage = Number(currentLocation.searchParams.get('page') || 1);
+    const currentPage = Number.isSafeInteger(requestedPage) && requestedPage > 0
+      ? Math.min(requestedPage, pageCount)
+      : 1;
+    const pageItems = visible.slice((currentPage - 1) * productsPerPage, currentPage * productsPerPage);
+    const shopPageUrl = (page: number) => {
+      const params = new URLSearchParams(currentLocation.searchParams);
+      if (page === 1) params.delete('page');
+      else params.set('page', String(page));
+      const query = params.toString();
+      return `/shop${query ? `?${query}` : ''}`;
+    };
     const availableCategories = [...new Set(familyItems.map((item) => item.category).filter((category): category is string => Boolean(category)))];
     const availableCollections = catalog.collections.filter((collection) =>
       (family === 'ALL' || collection.family === family) &&
@@ -570,7 +600,7 @@ function App() {
         ? categoryNameFor(categoryParam)
         : family === 'ALL'
           ? t.shop
-          : familyName(family, language);
+          : familyName(family);
     page = (
       <section className="section page-section shop-layout">
         <div className="shop-main">
@@ -602,42 +632,60 @@ function App() {
             )}
           </div>
           <aside className="shop-sidebar">
-            <nav className="shop-side-navigation" aria-label={t.navShop}>
-              <a className={`shop-side-link${family === 'ALL' && !selectedCollection && !categoryParam ? ' shop-side-active' : ''}`} href="/shop">
-                {t.all}
-              </a>
-              {(['PLAY', 'HOME', 'BUSINESS'] as const).map((world) => (
-                <div className="shop-side-world" key={world}>
-                  <a
-                    className={`shop-side-link${family === world ? ' shop-side-active' : ''}`}
-                    href={`/shop?family=${world}`}
-                    aria-current={family === world ? 'page' : undefined}
-                  >
-                    {familyName(world, language)}
-                    <span aria-hidden="true">›</span>
-                  </a>
-                  {family === world && availableCollections.length > 0 && (
-                    <div className="shop-side-collections">
-                      <span className="taxonomy-filter-label">{t.collectionLabel}</span>
-                      {availableCollections.map((collection) => (
-                        <a
-                          className={`shop-side-collection${selectedCollection?.id === collection.id ? ' shop-side-collection-active' : ''}`}
-                          href={`/shop?family=${world}&collection=${encodeURIComponent(collection.id)}`}
-                          key={collection.id}
-                          aria-current={selectedCollection?.id === collection.id ? 'page' : undefined}
-                        >
-                          {collectionNameFor(collection)}
-                        </a>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </nav>
+            <details className="shop-sidebar-details">
+              <summary>{t.browseCategories}</summary>
+              <nav className="shop-side-navigation" aria-label={t.browseCategories}>
+                <a className={`shop-side-link${family === 'ALL' && !selectedCollection && !categoryParam ? ' shop-side-active' : ''}`} href="/shop">
+                  {t.all}
+                </a>
+                {(['PLAY', 'HOME', 'BUSINESS'] as const).map((world) => (
+                  <div className="shop-side-world" key={world}>
+                    <a
+                      className={`shop-side-link${family === world ? ' shop-side-active' : ''}`}
+                      href={`/shop?family=${world}`}
+                      aria-current={family === world ? 'page' : undefined}
+                    >
+                      {familyName(world)}
+                      <span aria-hidden="true">›</span>
+                    </a>
+                    {family === world && availableCollections.length > 0 && (
+                      <div className="shop-side-collections">
+                        <span className="taxonomy-filter-label">{t.collectionLabel}</span>
+                        {availableCollections.map((collection) => (
+                          <a
+                            className={`shop-side-collection${selectedCollection?.id === collection.id ? ' shop-side-collection-active' : ''}`}
+                            href={`/shop?family=${world}&collection=${encodeURIComponent(collection.id)}`}
+                            key={collection.id}
+                            aria-current={selectedCollection?.id === collection.id ? 'page' : undefined}
+                          >
+                            {collectionNameFor(collection)}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </nav>
+            </details>
           </aside>
           <div className="shop-results">
             {catalogNotice}
-            {catalogState === 'ready' && (visible.length ? renderCards(visible) : <p className="notice">{t.empty}</p>)}
+            {catalogState === 'ready' && (visible.length ? (
+              <>
+                {renderCards(pageItems)}
+                {pageCount > 1 && (
+                  <nav className="shop-pagination" aria-label={t.paginationLabel}>
+                    {currentPage > 1
+                      ? <a href={shopPageUrl(currentPage - 1)}>{t.pagePrevious}</a>
+                      : <span className="shop-pagination-disabled" aria-disabled="true">{t.pagePrevious}</span>}
+                    <span aria-live="polite">{t.pageStatus(currentPage, pageCount)}</span>
+                    {currentPage < pageCount
+                      ? <a href={shopPageUrl(currentPage + 1)}>{t.pageNext}</a>
+                      : <span className="shop-pagination-disabled" aria-disabled="true">{t.pageNext}</span>}
+                  </nav>
+                )}
+              </>
+            ) : <p className="notice">{t.empty}</p>)}
           </div>
         </div>
       </section>
@@ -689,7 +737,7 @@ function App() {
             )}
           </div>
           <div className="detail-copy">
-            <span className="eyebrow eyebrow-coral">{familyName(selectedItem.family, language)} · {selectedItem.id}</span>
+            <span className="eyebrow eyebrow-coral">{familyName(selectedItem.family)} · {selectedItem.id}</span>
             <div className="detail-taxonomy">
               {collectionForItem(selectedItem) && <a href={`/shop?collection=${encodeURIComponent(collectionForItem(selectedItem)!.id)}`}>{collectionNameFor(collectionForItem(selectedItem)!)}</a>}
               {selectedItem.category && <a href={`/shop?family=${selectedItem.family}&category=${encodeURIComponent(selectedItem.category)}`}>{categoryNameFor(selectedItem.category)}</a>}
@@ -755,13 +803,11 @@ function App() {
           <span className="eyebrow eyebrow-coral">{t.navContact}</span>
           <h1>{t.contactTitle}</h1>
           <p>{t.contactBody}</p>
-          <div className="contact-links">
-            {contact.email && <a className="button button-outline" href={`mailto:${contact.email}`}>{contact.email}</a>}
-            {contact.whatsapp && <a className="button button-primary" href={contact.whatsapp} target="_blank" rel="noreferrer">WhatsApp ↗</a>}
-          </div>
-          <a className="contact-instagram" href="https://www.instagram.com/the_discoverybox/" target="_blank" rel="noreferrer">
-            <span aria-hidden="true">◎</span> @the_discoverybox <span aria-hidden="true">↗</span>
-          </a>
+          {contact.whatsapp && (
+            <div className="contact-links">
+              <a className="button button-primary" href={contact.whatsapp} target="_blank" rel="noreferrer">WhatsApp ↗</a>
+            </div>
+          )}
           {!contact.email && !contact.whatsapp && <p className="notice">{t.contactOptions}</p>}
         </div>
         <aside className="instagram-card" aria-labelledby="instagram-title">
@@ -792,9 +838,19 @@ function App() {
   return (
     <div className="site-shell" onClick={handleInternalNavigation}>
       <header className="site-header">
-        <a className="brand" href="/" aria-label="The Discovery Box home"><img src="/official-logo.png" alt="The Discovery Box" /></a>
+        <a className="brand" href="/" aria-label="The Discovery Box home">
+          <img src="/official-logo.png" alt="" />
+          <span className="brand-wordmark">The<br />Discovery<br />Box</span>
+        </a>
         <nav className={`main-nav${mobileMenuOpen ? ' nav-open' : ''}`} aria-label={language === 'en' ? 'Main navigation' : 'Navegação principal'}>
-          <a href="/shop" onClick={() => setMobileMenuOpen(false)}>{t.navShop}</a><a href="/gift-builder" onClick={() => setMobileMenuOpen(false)}>{t.navBuilder}</a><a href="/corporate" onClick={() => setMobileMenuOpen(false)}>{t.navCorporate}</a><a href="/about" onClick={() => setMobileMenuOpen(false)}>{t.navAbout}</a><a href="/contact" onClick={() => setMobileMenuOpen(false)}>{t.navContact}</a>
+          <a className={path === '/' ? 'nav-active' : undefined} href="/" aria-current={path === '/' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>{t.navHome}</a>
+          <a className={path === '/shop' ? 'nav-active' : undefined} href="/shop" aria-current={path === '/shop' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>{t.navShop}</a>
+          <a href="/shop" onClick={() => setMobileMenuOpen(false)}>{t.navCollections}</a>
+          <a className={path === '/gift-builder' ? 'nav-active' : undefined} href="/gift-builder" aria-current={path === '/gift-builder' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>{t.navBuilder}</a>
+          <a href="/gift-builder" onClick={() => setMobileMenuOpen(false)}>{t.navIdeas}</a>
+          <a className={path === '/corporate' ? 'nav-active' : undefined} href="/corporate" aria-current={path === '/corporate' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>{t.navCorporate}</a>
+          <a className={path === '/about' ? 'nav-active' : undefined} href="/about" aria-current={path === '/about' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>{t.navAbout}</a>
+          <a className={path === '/contact' ? 'nav-active' : undefined} href="/contact" aria-current={path === '/contact' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>{t.navContact}</a>
         </nav>
         <div className="header-actions">
           <button
@@ -806,6 +862,12 @@ function App() {
           >
             <span /><span /><span />
           </button>
+          <a className="header-icon-link" href="/shop" aria-label={t.searchGifts} title={t.searchGifts}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.6" /><path d="m16 16 4.3 4.3" /></svg>
+          </a>
+          <a className="header-icon-link" href="/gift-builder" aria-label={t.giftBuilder} title={t.giftBuilder}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 8.5h15l-1 12h-13l-1-12Z" /><path d="M8.5 8.5V6a3.5 3.5 0 0 1 7 0v2.5M12 12v5" /></svg>
+          </a>
           <div className="language-switch" aria-label={t.languageLabel}>
             <button type="button" onClick={() => setLanguage('en')} aria-pressed={language === 'en'}>EN</button>
             <span>/</span>
@@ -820,7 +882,7 @@ function App() {
           >
             <span aria-hidden="true">{theme === 'dark' ? '☼' : '☾'}</span>
           </button>
-          <a className="header-cta" href="/gift-builder">{t.create}<span aria-hidden="true">↗</span></a>
+          <a className="header-cta" href="/gift-builder">{t.create}<span aria-hidden="true">→</span></a>
         </div>
       </header>
       <main>{page}</main>
