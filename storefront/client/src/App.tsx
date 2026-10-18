@@ -32,6 +32,11 @@ type CatalogResponse = {
   items: CatalogItem[];
   collections: Collection[];
 };
+type GiftRecommendation = {
+  productId: string;
+  matchScore: number;
+  reason: string;
+};
 
 const copy = {
   en: {
@@ -128,6 +133,23 @@ const copy = {
     previous: 'Go back',
     occasion: 'What are we celebrating?',
     recipient: 'Who is it for?',
+    occasionDetailsLabel: 'Event name or occasion details (optional)',
+    occasionDetailsPlaceholder: 'Add the event name or tell us a little more',
+    recipientDetailsLabel: 'Tell us who the gift is for (optional)',
+    recipientDetailsPlaceholder: 'Describe the recipient',
+    recommendationTitle: 'Suggestions for your gift brief',
+    recommendationIntro: 'A little inspiration, made personal',
+    noBudgetMatches: 'The AI could not find a suitable match in the current collection. Browse all products or adjust your gift brief.',
+    showAllProducts: 'Browse all products',
+    showSuggestedProducts: 'Show suggested matches',
+    recommendationFallback: 'AI suggestions are temporarily unavailable. Browse all products or try again.',
+    recommendationLoading: 'Finding the best matches in our live collection…',
+    matchScore: 'Match',
+    moreDetails: 'More details',
+    closeDetails: 'Close product details',
+    whyThisMatches: 'Why it matches',
+    addProduct: 'Add to gift',
+    productSelected: 'Added to gift',
     budget: 'Your comfortable budget (MZN)',
     interests: 'What do they love? What should we know?',
     interestsHint: 'Interests, favourite colours, style or anything to avoid',
@@ -152,9 +174,10 @@ const copy = {
     disclaimer: 'This image is an illustration, not a photo of the finished gift. Final contents, personalization, price and delivery are confirmed by The Discovery Box.',
     privacy: 'Privacy',
     terms: 'Terms',
-    footer: 'Thoughtful gifts, playful objects and original 3D creations—made with care in Mozambique to turn everyday moments into personal discoveries.',
+    footer: 'Thoughtful gifts, playful objects and original 3D creations made with care in Mozambique to turn everyday moments into personal discoveries.',
     corporateTitle: 'Thoughtful gifting for teams, clients and celebrations.',
     corporateBody: 'From a few meaningful thank-yous to a company-wide celebration, tell us what you have in mind and our team will help shape it.',
+    corporateCta: 'Tell us what you have in mind',
     aboutTitle: 'The joy is in the discovery.',
     aboutBody: 'The Discovery Box brings together thoughtful finds and personal touches to make the people in your life feel truly seen.',
     contactTitle: 'We’d love to hear what you’re celebrating.',
@@ -164,14 +187,15 @@ const copy = {
     instagramScan: 'Scan to follow',
     instagramQrAlt: 'Instagram QR code for @the_discoverybox',
     contactOptions: 'Contact options are being confirmed. You can still send an enquiry using the gift builder.',
+    contactEmail: 'Email us',
     privacyTitle: 'Privacy notice',
-    privacyBody: 'We use the contact details and gift brief you submit only to respond to your enquiry. If you use the chat assistant, your messages are sent to Ollama to generate a response; please do not include sensitive personal information. Your contact details are sent to our enquiry email provider and are not sent to the image-generation provider. If you choose to request an illustrative image, only your gift preferences and selected public product names are sent to the AI provider. This site stores your language choice in your browser.',
+    privacyBody: 'We use the contact details and gift brief you submit only to respond to your enquiry. Chat messages are sent to Ollama to generate replies. When you continue from the gift brief to product selection, your occasion, recipient, budget and preferences are also sent to Ollama to match against the catalogue. Do not include sensitive personal information in free-text fields. Your contact details are sent to our enquiry email provider and are not sent to the recommendation or image-generation providers. If you request an illustrative image, your occasion, recipient, budget, preferences and selected public product names are sent to Google Gemini to create it. This site stores your language choice in your browser.',
     termsTitle: 'Important information',
     termsBody: 'Product availability, contents, personalization, prices and delivery details are confirmed by The Discovery Box. Gift-builder selections and generated images are suggestions only and do not create an order or a binding offer. No online payment or order reservation is available on this website.',
     occasions: ['Birthday', 'Anniversary', 'Thank you', 'New baby', 'Celebration', 'Corporate event', 'Something else'],
     recipients: ['Friend', 'Partner', 'Child', 'Family member', 'Colleague', 'Client', 'Someone else'],
+    corporateRecipients: ['Employees or team', 'Clients', 'Business partners', 'Event attendees', 'VIP guests', 'Suppliers', 'Something else'],
     notFound: 'We couldn’t find that page.',
-    businessCollections: 'Ideas for your brand, team and next big moment.',
   },
   pt: {
     navHome: 'Início',
@@ -267,6 +291,23 @@ const copy = {
     previous: 'Voltar',
     occasion: 'O que vamos celebrar?',
     recipient: 'Para quem é?',
+    occasionDetailsLabel: 'Nome do evento ou detalhes da ocasião (opcional)',
+    occasionDetailsPlaceholder: 'Indique o nome do evento ou conte-nos um pouco mais',
+    recipientDetailsLabel: 'Diga-nos para quem é o presente (opcional)',
+    recipientDetailsPlaceholder: 'Descreva o destinatário',
+    recommendationTitle: 'Sugestões para a sua ideia de presente',
+    recommendationIntro: 'Uma inspiração feita à sua medida',
+    noBudgetMatches: 'A IA não encontrou opções adequadas na coleção atual. Explore todos os produtos ou ajuste os detalhes do presente.',
+    showAllProducts: 'Ver todos os produtos',
+    showSuggestedProducts: 'Ver sugestões',
+    recommendationFallback: 'As sugestões de IA estão temporariamente indisponíveis. Explore todos os produtos ou tente novamente.',
+    recommendationLoading: 'A encontrar as melhores opções na coleção atual…',
+    matchScore: 'Correspondência',
+    moreDetails: 'Mais detalhes',
+    closeDetails: 'Fechar detalhes do produto',
+    whyThisMatches: 'Porque combina',
+    addProduct: 'Adicionar ao presente',
+    productSelected: 'Adicionado ao presente',
     budget: 'Orçamento aproximado (MZN)',
     interests: 'Do que gosta? O que devemos saber?',
     interestsHint: 'Interesses, cores favoritas, estilo ou algo a evitar',
@@ -294,6 +335,7 @@ const copy = {
     footer: 'Presentes especiais, objetos divertidos e criações 3D originais, feitos com carinho em Moçambique para transformar momentos comuns em descobertas pessoais.',
     corporateTitle: 'Presentes especiais para equipas, clientes e celebrações.',
     corporateBody: 'De alguns agradecimentos a uma celebração para toda a empresa, conte-nos a sua ideia e a nossa equipa ajudará a desenvolvê-la.',
+    corporateCta: 'Conte-nos a sua ideia',
     aboutTitle: 'A alegria está na descoberta.',
     aboutBody: 'A Discovery Box reúne descobertas especiais e toques pessoais para que as pessoas importantes se sintam verdadeiramente valorizadas.',
     contactTitle: 'Conte-nos o que vamos celebrar.',
@@ -303,14 +345,15 @@ const copy = {
     instagramScan: 'Leia para seguir',
     instagramQrAlt: 'Código QR do Instagram para @the_discoverybox',
     contactOptions: 'Os contactos estão a ser confirmados. Ainda pode enviar um pedido através do criador de presentes.',
+    contactEmail: 'Envie-nos um email',
     privacyTitle: 'Aviso de privacidade',
-    privacyBody: 'Utilizamos os contactos e a descrição enviados apenas para responder ao seu pedido. Se utilizar o assistente de conversa, as suas mensagens são enviadas à Ollama para gerar uma resposta; não inclua informações pessoais sensíveis. Os seus contactos são enviados ao nosso serviço de email e não são enviados ao serviço de criação de imagens. Se pedir uma imagem ilustrativa, apenas as preferências e os nomes dos produtos públicos selecionados são enviados ao fornecedor de IA. Este site guarda a sua preferência de idioma no navegador.',
+    privacyBody: 'Utilizamos os contactos e a descrição enviados apenas para responder ao seu pedido. As mensagens de conversa são enviadas à Ollama para gerar respostas. Quando avança da descrição do presente para a seleção de produtos, a ocasião, o destinatário, o orçamento e as preferências também são enviados à Ollama para encontrar correspondências no catálogo. Não inclua informações pessoais sensíveis nos campos de texto livre. Os seus contactos são enviados ao nosso serviço de email e não são enviados aos serviços de recomendações ou de criação de imagens. Se pedir uma imagem ilustrativa, a ocasião, o destinatário, o orçamento, as preferências e os nomes dos produtos públicos selecionados são enviados à Google Gemini para a criar. Este site guarda a sua preferência de idioma no navegador.',
     termsTitle: 'Informações importantes',
     termsBody: 'A disponibilidade, os conteúdos, a personalização, os preços e a entrega são confirmados pela The Discovery Box. As seleções e imagens geradas são apenas sugestões e não constituem uma encomenda ou oferta vinculativa. Este website não permite pagamentos nem reserva de encomendas.',
     occasions: ['Aniversário', 'Aniversário de relacionamento', 'Agradecimento', 'Nascimento', 'Celebração', 'Evento empresarial', 'Outra ocasião'],
     recipients: ['Amigo/a', 'Companheiro/a', 'Criança', 'Familiar', 'Colega', 'Cliente', 'Outra pessoa'],
+    corporateRecipients: ['Colaboradores ou equipa', 'Clientes', 'Parceiros de negócio', 'Participantes no evento', 'Convidados VIP', 'Fornecedores', 'Outra opção'],
     notFound: 'Não encontrámos esta página.',
-    businessCollections: 'Ideias para a sua marca, equipa e próxima celebração.',
   },
 } as const;
 
@@ -409,19 +452,22 @@ function App() {
     );
   }, [theme]);
 
+  const refreshCatalog = useCallback(async () => {
+    const response = await fetch('/api/catalog', { cache: 'no-store' });
+    if (!response.ok) throw new Error('Catalogue refresh failed');
+    const nextCatalog = await response.json() as CatalogResponse;
+    setCatalog(nextCatalog);
+    setCatalogState('ready');
+    return nextCatalog;
+  }, []);
+
   useEffect(() => {
-    fetch('/api/catalog').then((response) => {
-      if (!response.ok) throw new Error('Catalogue request failed');
-      return response.json() as Promise<CatalogResponse>;
-    }).then((nextCatalog) => {
-      setCatalog(nextCatalog);
-      setCatalogState('ready');
-    }).catch(() => setCatalogState('error'));
+    void refreshCatalog().catch(() => setCatalogState('error'));
     fetch('/api/public-config').then((response) => {
       if (!response.ok) throw new Error('Contact configuration request failed');
       return response.json() as Promise<{ email: string; whatsapp: string }>;
     }).then(setContact).catch(() => setContact({ email: '', whatsapp: '' }));
-  }, []);
+  }, [refreshCatalog]);
 
   const itemById = useMemo(() => new Map(catalog.items.map((item) => [item.id, item])), [catalog.items]);
   const selectedItemId = path.startsWith('/product/') ? decodeURIComponent(path.slice('/product/'.length)) : '';
@@ -770,24 +816,36 @@ function App() {
     ) : catalogState === 'loading' ? <section className="section page-section">{catalogNotice}</section>
       : <section className="section page-section"><p className="notice">{catalogState === 'error' ? t.catalogError : t.notFound}</p></section>;
   } else if (path === '/gift-builder') {
-    page = <GiftBuilder catalog={catalog} catalogState={catalogState} language={language} t={t} nameFor={nameFor} descriptionFor={descriptionFor} productImage={productImage} productImageStyle={productImageStyle} initialProduct={currentLocation.searchParams.get('product') || ''} assistantDraft={assistantGiftDraft} onAssistantDraftApplied={clearAssistantGiftDraft} />;
+    page = <GiftBuilder catalog={catalog} catalogState={catalogState} language={language} t={t} nameFor={nameFor} descriptionFor={descriptionFor} productImage={productImage} productImageStyle={productImageStyle} imageStyle={imageStyle} initialProduct={currentLocation.searchParams.get('product') || ''} assistantDraft={assistantGiftDraft} onAssistantDraftApplied={clearAssistantGiftDraft} refreshCatalog={refreshCatalog} />;
   } else if (path === '/corporate') {
     const businessCollections = catalog.collections.filter((collection) => collection.family === 'BUSINESS');
     page = (
-      <section className="section content-page editorial-page">
-        <span className="eyebrow eyebrow-coral">{t.navCorporate}</span>
-        <h1>{t.corporateTitle}</h1>
-        <p>{t.corporateBody}</p>
-        <p>{t.businessCollections}</p>
-        {businessCollections.length > 0 && <div className="editorial-collections">{businessCollections.map((collection) => (
-          <a className="editorial-collection" href={`/shop?collection=${encodeURIComponent(collection.id)}`} key={collection.id}>
-            <span>{collectionNameFor(collection)}</span>
-            <strong>{language === 'en' ? collection.tagline_en : collection.tagline_pt}</strong>
-            <span aria-hidden="true">↗</span>
-          </a>
-        ))}</div>}
-        <a className="button button-primary" href="/gift-builder">{t.create}<span aria-hidden="true">↗</span></a>
-      </section>
+      <>
+        <section className="hero corporate-hero">
+          <img
+            className="hero-artwork"
+            src="/corporate-team-showcase.png"
+            alt={language === 'en' ? 'The Discovery Box team showcasing branded corporate gifts' : 'A equipa da The Discovery Box a apresentar presentes empresariais personalizados'}
+          />
+          <div className="hero-content">
+            <span className="eyebrow">{t.navCorporate}</span>
+            <h1>{t.corporateTitle}</h1>
+            <p>{t.corporateBody}</p>
+            <div className="button-row">
+              <a className="button button-primary" href="/gift-builder">{t.corporateCta}<span aria-hidden="true">→</span></a>
+            </div>
+          </div>
+        </section>
+        <section className="corporate-collections-section">
+          {businessCollections.length > 0 && <div className="editorial-collections">{businessCollections.map((collection) => (
+            <a className="editorial-collection" href={`/shop?collection=${encodeURIComponent(collection.id)}`} key={collection.id}>
+              <span>{collectionNameFor(collection)}</span>
+              <strong>{language === 'en' ? collection.tagline_en : collection.tagline_pt}</strong>
+              <span aria-hidden="true">↗</span>
+            </a>
+          ))}</div>}
+        </section>
+      </>
     );
   } else if (path === '/about') {
     page = (
@@ -820,9 +878,16 @@ function App() {
           <span className="eyebrow eyebrow-coral">{t.navContact}</span>
           <h1>{t.contactTitle}</h1>
           <p>{t.contactBody}</p>
-          {contact.whatsapp && (
+          {(contact.email || contact.whatsapp) && (
             <div className="contact-links">
-              <a className="button button-primary" href={contact.whatsapp} target="_blank" rel="noreferrer">WhatsApp ↗</a>
+              {contact.email && (
+                <a className="button button-primary" href={`mailto:${contact.email}`}>
+                  {t.contactEmail}: {contact.email}
+                </a>
+              )}
+              {contact.whatsapp && (
+                <a className="button button-primary" href={contact.whatsapp} target="_blank" rel="noreferrer">WhatsApp ↗</a>
+              )}
             </div>
           )}
           {!contact.email && !contact.whatsapp && <p className="notice">{t.contactOptions}</p>}
@@ -922,7 +987,7 @@ function App() {
 }
 
 function GiftBuilder({
-  catalog, catalogState, language, t, nameFor, descriptionFor, productImage, productImageStyle, initialProduct, assistantDraft, onAssistantDraftApplied,
+  catalog, catalogState, language, t, nameFor, descriptionFor, productImage, productImageStyle, imageStyle, initialProduct, assistantDraft, onAssistantDraftApplied, refreshCatalog,
 }: {
   catalog: CatalogResponse;
   catalogState: 'loading' | 'ready' | 'error';
@@ -932,14 +997,18 @@ function GiftBuilder({
   descriptionFor: (item: CatalogItem) => string;
   productImage: (item: CatalogItem) => string;
   productImageStyle: (item: CatalogItem) => CSSProperties;
+  imageStyle: (item: CatalogItem, index: number) => CSSProperties;
   initialProduct: string;
   assistantDraft: AssistantGiftDraft | null;
   onAssistantDraftApplied: () => void;
+  refreshCatalog: () => Promise<CatalogResponse>;
 }) {
   const [step, setStep] = useState(1);
   const [selected, setSelected] = useState<string[]>(initialProduct ? [initialProduct] : []);
   const [occasion, setOccasion] = useState('');
+  const [occasionDetails, setOccasionDetails] = useState('');
   const [recipient, setRecipient] = useState('');
+  const [recipientDetails, setRecipientDetails] = useState('');
   const [budget, setBudget] = useState('');
   const [preferences, setPreferences] = useState('');
   const [cardMessage, setCardMessage] = useState('');
@@ -951,11 +1020,69 @@ function GiftBuilder({
   const [error, setError] = useState('');
   const [sent, setSent] = useState(false);
   const [conceptImage, setConceptImage] = useState('');
+  const [recommendations, setRecommendations] = useState<GiftRecommendation[] | null>(null);
+  const [recommendationMessage, setRecommendationMessage] = useState('');
+  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
+  const [productDetails, setProductDetails] = useState<{ item: CatalogItem; recommendation: GiftRecommendation | null } | null>(null);
+  const [productDetailsImageIndex, setProductDetailsImageIndex] = useState(0);
+  const [showAllProducts, setShowAllProducts] = useState(false);
+  const [recommendationError, setRecommendationError] = useState('');
+  const recommendationRequestRef = useRef(0);
   const appliedAssistantDraftRef = useRef<AssistantGiftDraft | null>(null);
+  const productDetailsImages = productDetails?.item.images?.flatMap((src, index) => src ? [{ src, index }] : []) ?? [];
+  const activeProductDetailsImagePosition = productDetailsImages.findIndex(({ index }) => index === productDetailsImageIndex);
+  const activeProductDetailsImage = productDetailsImages[activeProductDetailsImagePosition];
+  const openProductDetails = (item: CatalogItem, recommendation: GiftRecommendation | null) => {
+    const images = item.images?.flatMap((src, index) => src ? [{ src, index }] : []) ?? [];
+    const primaryImage = images.find(({ index }) => index === item.primary_image_index) ?? images[0];
+    setProductDetailsImageIndex(primaryImage?.index ?? 0);
+    setProductDetails({ item, recommendation });
+  };
+  useEffect(() => {
+    if (!productDetails) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setProductDetails(null);
+        return;
+      }
+      if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && productDetailsImages.length > 1) {
+        event.preventDefault();
+        setProductDetailsImageIndex((currentIndex) => {
+          const currentPosition = productDetailsImages.findIndex(({ index }) => index === currentIndex);
+          const direction = event.key === 'ArrowRight' ? 1 : -1;
+          const nextPosition = (currentPosition + direction + productDetailsImages.length) % productDetailsImages.length;
+          return productDetailsImages[nextPosition].index;
+        });
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [productDetails]);
   const selectedProducts = catalog.items.filter((item) => selected.includes(item.id));
   const selectedNames = selectedProducts.map(nameFor);
-  const selectedOccasion = occasion || (language === 'en' ? 'Something else' : 'Outra ocasião');
-  const selectedRecipient = recipient || (language === 'en' ? 'Someone else' : 'Outra pessoa');
+  const corporateEventOption = language === 'en' ? 'Corporate event' : 'Evento empresarial';
+  const otherOccasionOption = t.occasions[t.occasions.length - 1];
+  const isCorporateEvent = occasion === corporateEventOption;
+  const recipientOptions = isCorporateEvent ? t.corporateRecipients : t.recipients;
+  const otherRecipientOption = recipientOptions[recipientOptions.length - 1];
+  const selectedOccasion = occasion
+    ? occasion === otherOccasionOption && occasionDetails.trim()
+      ? `${occasion}: ${occasionDetails.trim()}`
+      : occasion
+    : otherOccasionOption;
+  const selectedRecipient = recipient
+    ? recipient === otherRecipientOption && recipientDetails.trim()
+      ? `${recipient}: ${recipientDetails.trim()}`
+      : recipient
+    : t.recipients[t.recipients.length - 1];
+  const productsForStep: Array<{ item: CatalogItem; recommendation: GiftRecommendation | null }> = showAllProducts
+    ? catalog.items.map((item) => ({ item, recommendation: null }))
+    : (recommendations || [])
+      .map((recommendation) => ({
+        item: catalog.items.find((candidate) => candidate.id === recommendation.productId),
+        recommendation,
+      }))
+      .filter((entry): entry is { item: CatalogItem; recommendation: GiftRecommendation } => Boolean(entry.item));
 
   useEffect(() => {
     if (!assistantDraft || appliedAssistantDraftRef.current === assistantDraft) return;
@@ -976,6 +1103,79 @@ function GiftBuilder({
   const toggleProduct = (id: string) => setSelected((items) =>
     items.includes(id) ? items.filter((item) => item !== id) : items.length < 5 ? [...items, id] : items,
   );
+
+  useEffect(() => {
+    if (!productDetails) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setProductDetails(null);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [productDetails]);
+
+  const advanceStep = () => {
+    setError('');
+    if (step === 1 && (!occasion || !recipient)) {
+      setError(t.required);
+      return;
+    }
+    if (step === 1) {
+      const requestId = ++recommendationRequestRef.current;
+      setRecommendations(null);
+      setRecommendationMessage('');
+      setRecommendationsLoading(true);
+      setShowAllProducts(false);
+      setRecommendationError('');
+      setStep(2);
+
+      void (async () => {
+        try {
+          const recommendationCatalog = await refreshCatalog();
+          if (requestId !== recommendationRequestRef.current) return;
+          const response = await fetch('/api/gift-recommendations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              language,
+              occasion: selectedOccasion,
+              recipient: selectedRecipient,
+              budget,
+              preferences,
+            }),
+          });
+          if (!response.ok) throw new Error('Recommendation request failed');
+          const result = await response.json() as { recommendations?: unknown; message?: unknown };
+          if (typeof result.message !== 'string' || !Array.isArray(result.recommendations)) {
+            throw new Error('Recommendation response was invalid');
+          }
+          if (requestId !== recommendationRequestRef.current) return;
+          const catalogueItems = new Map(recommendationCatalog.items.map((item) => [item.id, item]));
+          const validRecommendations = result.recommendations.filter((entry): entry is GiftRecommendation =>
+            Boolean(entry) && typeof entry === 'object' &&
+            typeof (entry as GiftRecommendation).productId === 'string' &&
+            typeof (entry as GiftRecommendation).matchScore === 'number' &&
+            Number.isInteger((entry as GiftRecommendation).matchScore) &&
+            (entry as GiftRecommendation).matchScore >= 0 &&
+            (entry as GiftRecommendation).matchScore <= 100 &&
+            typeof (entry as GiftRecommendation).reason === 'string' &&
+            catalogueItems.has((entry as GiftRecommendation).productId));
+          setRecommendationMessage(result.message.trim());
+          setRecommendations(validRecommendations.sort((left, right) => right.matchScore - left.matchScore));
+        } catch {
+          if (requestId === recommendationRequestRef.current) {
+            setRecommendationError(t.recommendationFallback);
+            setRecommendations([]);
+          }
+        } finally {
+          if (requestId === recommendationRequestRef.current) {
+            setRecommendationsLoading(false);
+          }
+        }
+      })();
+      return;
+    }
+    setStep(step + 1);
+  };
 
   const requestImage = async () => {
     setError('');
@@ -1040,23 +1240,56 @@ function GiftBuilder({
       {sent ? <div className="success-card"><span className="success-icon">✓</span><h2>{t.sent}</h2><a className="button button-primary" href="/shop">{t.browse}</a></div> : (
         <>
           {step === 1 && <div className="builder-panel">
-            <label>{t.occasion}<select value={occasion} onChange={(event) => setOccasion(event.target.value)}><option value="">—</option>{occasion && !(t.occasions as readonly string[]).includes(occasion) && <option>{occasion}</option>}{t.occasions.map((item) => <option key={item}>{item}</option>)}</select></label>
-            <label>{t.recipient}<select value={recipient} onChange={(event) => setRecipient(event.target.value)}><option value="">—</option>{recipient && !(t.recipients as readonly string[]).includes(recipient) && <option>{recipient}</option>}{t.recipients.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <label>{t.occasion}<select value={occasion} onChange={(event) => {
+              const nextOccasion = event.target.value;
+              setOccasion(nextOccasion);
+              setRecipient('');
+              setRecipientDetails('');
+              if (nextOccasion !== otherOccasionOption) setOccasionDetails('');
+            }}><option value="">—</option>{occasion && !(t.occasions as readonly string[]).includes(occasion) && <option>{occasion}</option>}{t.occasions.map((item) => <option key={item}>{item}</option>)}</select></label>
+            {occasion === otherOccasionOption && <label>{t.occasionDetailsLabel}<input type="text" maxLength={120} value={occasionDetails} onChange={(event) => setOccasionDetails(event.target.value)} placeholder={t.occasionDetailsPlaceholder} /></label>}
+            <label>{t.recipient}<select value={recipient} onChange={(event) => {
+              const nextRecipient = event.target.value;
+              setRecipient(nextRecipient);
+              if (nextRecipient !== otherRecipientOption) setRecipientDetails('');
+            }}><option value="">—</option>{recipient && !(recipientOptions as readonly string[]).includes(recipient) && <option>{recipient}</option>}{recipientOptions.map((item) => <option key={item}>{item}</option>)}</select></label>
+            {recipient === otherRecipientOption && <label>{t.recipientDetailsLabel}<input type="text" maxLength={120} value={recipientDetails} onChange={(event) => setRecipientDetails(event.target.value)} placeholder={t.recipientDetailsPlaceholder} /></label>}
             <label>{t.budget}<input type="number" min="0" max="10000000" value={budget} onChange={(event) => setBudget(event.target.value)} /></label>
             <label>{t.interests}<textarea maxLength={1000} placeholder={t.interestsHint} value={preferences} onChange={(event) => setPreferences(event.target.value)} /></label>
           </div>}
           {step === 2 && <div className="builder-panel">
             <h2>{t.chooseProducts}</h2>
+            {recommendationError && <p className="notice notice-error" role="status">{recommendationError}</p>}
+            {recommendationMessage && <div className="recommendation-intro">
+              <span className="eyebrow">{t.recommendationIntro}</span>
+              <p>{recommendationMessage}</p>
+            </div>}
+            <div className="recommendation-controls">
+              <span>{t.recommendationTitle}</span>
+              <button type="button" className="text-link" onClick={() => setShowAllProducts((current) => !current)}>
+                {showAllProducts ? t.showSuggestedProducts : t.showAllProducts}
+              </button>
+            </div>
+            {recommendationsLoading && !showAllProducts && <p className="notice" role="status">{t.recommendationLoading}</p>}
             {catalogState === 'loading' && <p className="notice">{t.loading}</p>}
             {catalogState === 'error' && <p className="notice notice-error">{t.catalogError}</p>}
             {catalogState === 'ready' && !catalog.items.length && <p className="notice">{t.empty}</p>}
+            {catalogState === 'ready' && catalog.items.length > 0 && !showAllProducts &&
+              !recommendationsLoading && !recommendationError && recommendations?.length === 0 &&
+              <p className="notice">{t.noBudgetMatches}</p>}
             <div className="choice-grid">
-              {catalog.items.map((item) => (
-                <label className={`choice-card ${selected.includes(item.id) ? 'choice-selected' : ''}`} key={item.id}>
-                  <input type="checkbox" checked={selected.includes(item.id)} onChange={() => toggleProduct(item.id)} disabled={!selected.includes(item.id) && selected.length >= 5} />
-                  {productImage(item) && <img src={productImage(item)} alt="" style={productImageStyle(item)} loading="lazy" />}
-                  <span><strong>{nameFor(item)}</strong><small>{descriptionFor(item)}</small></span>
-                </label>
+              {productsForStep.map(({ item, recommendation }) => (
+                <article className={`choice-card ${selected.includes(item.id) ? 'choice-selected' : ''}`} key={item.id}>
+                  <label className="choice-card-main" htmlFor={`gift-product-${item.id}`}>
+                    <input id={`gift-product-${item.id}`} type="checkbox" checked={selected.includes(item.id)} onChange={() => toggleProduct(item.id)} disabled={!selected.includes(item.id) && selected.length >= 5} />
+                    {productImage(item) && <img src={productImage(item)} alt="" style={productImageStyle(item)} loading="lazy" />}
+                    <span><strong>{nameFor(item)}</strong><small>{descriptionFor(item)}</small></span>
+                  </label>
+                  <div className="choice-card-actions">
+                    {recommendation && <span className="match-score" aria-label={`${t.matchScore}: ${recommendation.matchScore}%`}>{recommendation.matchScore}% {t.matchScore}</span>}
+                    <button className="text-link" type="button" onClick={() => openProductDetails(item, recommendation)}>{t.moreDetails}</button>
+                  </div>
+                </article>
               ))}
             </div>
           </div>}
@@ -1083,20 +1316,84 @@ function GiftBuilder({
             <button className="button button-primary submit-button" type="submit" disabled={busy !== ''}>{busy === 'submit' ? t.sending : t.submit}<span aria-hidden="true">↗</span></button>
           </form>}
           {step !== 3 && <div className="builder-controls">
-            {step > 1 ? <button className="button button-outline" type="button" onClick={() => setStep(step - 1)}>{t.previous}</button> : <span />}
-            <button className="button button-primary" type="button" onClick={() => {
-              setError('');
-              if (step === 1 && (!occasion || !recipient)) {
-                setError(t.required);
-                return;
-              }
-              setStep(step + 1);
-            }}>{t.next}<span aria-hidden="true">↗</span></button>
+            {step > 1 ? <button className="button button-outline" type="button" onClick={() => {
+              recommendationRequestRef.current += 1;
+              setStep(step - 1);
+            }}>{t.previous}</button> : <span />}
+            <button className="button button-primary" type="button" onClick={advanceStep} disabled={busy !== ''}>
+              {t.next}<span aria-hidden="true">↗</span>
+            </button>
           </div>}
           {step === 3 && <div className="builder-controls"><button className="button button-outline" type="button" onClick={() => setStep(2)}>{t.previous}</button></div>}
           {error && step !== 3 && <p className="notice notice-error" role="alert">{error}</p>}
         </>
       )}
+      {productDetails && <div className="product-modal-backdrop" onMouseDown={(event) => {
+        if (event.target === event.currentTarget) setProductDetails(null);
+      }}>
+        <section className="product-modal" role="dialog" aria-modal="true" aria-labelledby="gift-product-details-title">
+          <button className="product-modal-close" type="button" aria-label={t.closeDetails} onClick={() => setProductDetails(null)}>×</button>
+          {activeProductDetailsImage
+            ? <div className="product-modal-gallery">
+              <div className="product-modal-gallery-frame">
+                <img
+                  className="product-modal-image"
+                  src={activeProductDetailsImage.src}
+                  alt={`${nameFor(productDetails.item)} — ${t.imageNumber(activeProductDetailsImagePosition + 1, productDetailsImages.length)}`}
+                  style={imageStyle(productDetails.item, activeProductDetailsImage.index)}
+                />
+                {productDetailsImages.length > 1 && <span className="gallery-count" aria-live="polite">{t.imageNumber(activeProductDetailsImagePosition + 1, productDetailsImages.length)}</span>}
+              </div>
+              {productDetailsImages.length > 1 && <>
+                <div className="product-modal-thumbnails" role="group" aria-label={nameFor(productDetails.item)}>
+                  {productDetailsImages.map(({ src, index }, position) => (
+                    <button
+                      className={`detail-thumbnail${index === productDetailsImageIndex ? ' thumbnail-active' : ''}`}
+                      type="button"
+                      key={`${productDetails.item.id}-${index}-${src}`}
+                      aria-label={t.imageNumber(position + 1, productDetailsImages.length)}
+                      aria-pressed={index === productDetailsImageIndex}
+                      onClick={() => setProductDetailsImageIndex(index)}
+                    >
+                      <img src={src} alt="" loading="lazy" style={imageStyle(productDetails.item, index)} />
+                    </button>
+                  ))}
+                </div>
+                <div className="gallery-controls">
+                  <button
+                    type="button"
+                    className="gallery-arrow"
+                    aria-label={t.previousImage}
+                    onClick={() => setProductDetailsImageIndex(productDetailsImages[(activeProductDetailsImagePosition - 1 + productDetailsImages.length) % productDetailsImages.length].index)}
+                  >←</button>
+                  <button
+                    type="button"
+                    className="gallery-arrow"
+                    aria-label={t.nextImage}
+                    onClick={() => setProductDetailsImageIndex(productDetailsImages[(activeProductDetailsImagePosition + 1) % productDetailsImages.length].index)}
+                  >→</button>
+                </div>
+              </>}
+            </div>
+            : <div className="product-modal-gallery-frame product-modal-image-placeholder"><span className="image-placeholder">✦</span></div>}
+          <span className="eyebrow">{productDetails.item.family}</span>
+          <h2 id="gift-product-details-title">{nameFor(productDetails.item)}</h2>
+          {productDetails.item.category && <p className="product-modal-category">{productDetails.item.category}</p>}
+          <p className="product-modal-description">{descriptionFor(productDetails.item)}</p>
+          <strong className="product-modal-price">{productDetails.item.price_mzn != null
+            ? `${Number(productDetails.item.price_mzn).toLocaleString(language === 'pt' ? 'pt-MZ' : 'en-US')} MZN`
+            : t.noPrice}</strong>
+          {productDetails.recommendation && <div className="product-modal-match">
+            <strong>{productDetails.recommendation.matchScore}% {t.matchScore}</strong>
+            <span>{t.whyThisMatches}</span>
+            <p>{productDetails.recommendation.reason}</p>
+          </div>}
+          <label className="product-modal-select">
+            <input type="checkbox" checked={selected.includes(productDetails.item.id)} onChange={() => toggleProduct(productDetails.item.id)} disabled={!selected.includes(productDetails.item.id) && selected.length >= 5} />
+            {selected.includes(productDetails.item.id) ? t.productSelected : t.addProduct}
+          </label>
+        </section>
+      </div>}
     </section>
   );
 }

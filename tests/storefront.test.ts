@@ -14,6 +14,8 @@ for (const key of [
   'BREVO_API_KEY',
   'BREVO_FROM_EMAIL',
   'BREVO_FROM_NAME',
+  'PUBLIC_CONTACT_EMAIL',
+  'PUBLIC_WHATSAPP_URL',
 ]) {
   delete process.env[key];
 }
@@ -39,6 +41,22 @@ test('storefront health endpoint is public and omits Express identification', as
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('x-powered-by'), null);
   assert.deepEqual(await response.json(), { status: 'ok' });
+});
+
+test('public config returns configured contact details and validates their formats', async () => {
+  process.env.PUBLIC_CONTACT_EMAIL = '  info@example.com  ';
+  process.env.PUBLIC_WHATSAPP_URL = 'https://wa.me/258841234567';
+  try {
+    const response = await fetch(`${baseUrl}/api/public-config`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      email: 'info@example.com',
+      whatsapp: 'https://wa.me/258841234567',
+    });
+  } finally {
+    delete process.env.PUBLIC_CONTACT_EMAIL;
+    delete process.env.PUBLIC_WHATSAPP_URL;
+  }
 });
 
 test('catalogue storage paths become public Supabase Storage URLs', () => {
@@ -73,6 +91,65 @@ test('catalogue API fails explicitly when public Supabase settings are absent', 
   const response = await fetch(`${baseUrl}/api/catalog`);
   assert.equal(response.status, 503);
   assert.match((await response.json()).error, /not configured/i);
+});
+
+test('public catalogue API retrieves products beyond the first database page', async () => {
+  const originalFetch = globalThis.fetch;
+  process.env.SUPABASE_URL = 'https://catalogue-pagination-test.supabase.co';
+  process.env.SUPABASE_PUBLISHABLE_KEY = 'test-public-key';
+  let itemPage = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url.includes('/rest/v1/public_catalog_items')) {
+      const count = itemPage++ === 0 ? 500 : 1;
+      return new Response(JSON.stringify(Array.from({ length: count }, (_, index) => ({
+        id: `live-product-${itemPage}-${index}`,
+        family: 'PLAY',
+        collection: 'DISCOVERY PLAY',
+        category: 'Games',
+        name_en: 'Live catalogue item',
+        name_pt: 'Produto do catálogo atual',
+        description_en: 'A product added to the live catalogue.',
+        description_pt: 'Um produto adicionado ao catálogo atual.',
+        price_mzn: 1000,
+        images: [],
+        image_crops: [],
+        primary_image_index: 0,
+      }))), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (url.includes('/rest/v1/public_catalog_collections')) {
+      return new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const response = await fetch(`${baseUrl}/api/catalog`);
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.items.length, 501);
+    assert.equal(itemPage, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_PUBLISHABLE_KEY;
+  }
+});
+
+test('gift recommendations report unavailable services instead of returning success-shaped results', async () => {
+  const response = await fetch(`${baseUrl}/api/gift-recommendations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      language: 'en',
+      occasion: 'Birthday',
+      recipient: 'Child',
+      budget: '',
+      preferences: 'Likes painting',
+    }),
+  });
+  assert.equal(response.status, 503);
+  assert.match((await response.json()).error, /temporarily unavailable/i);
 });
 
 test('enquiry API rejects unconsented or malformed input before provider calls', async () => {
@@ -151,8 +228,8 @@ test('valid enquiry sends its details through Brevo to the Discovery Box inbox',
         email: 'ana@example.com',
         phone: '+258 84 123 4567',
         language: 'pt',
-        occasion: 'Aniversário',
-        recipient: 'Amiga',
+        occasion: 'Outra ocasião: Lançamento & celebração',
+        recipient: 'Outra opção: 300 participantes',
         budget: '2500',
         preferences: '<script>cores vivas</script>',
         cardMessage: 'Muitas felicidades!',
@@ -184,6 +261,8 @@ test('valid enquiry sends its details through Brevo to the Discovery Box inbox',
   assert.match(providerRequest.body.htmlContent, /@page\s*\{\s*size:\s*A5 portrait;/);
   assert.match(providerRequest.body.htmlContent, /Novo pedido de presente/);
   assert.match(providerRequest.body.htmlContent, /Resumo do presente/);
+  assert.match(providerRequest.body.htmlContent, /Outra ocasião: Lançamento &amp; celebração/);
+  assert.match(providerRequest.body.htmlContent, /Outra opção: 300 participantes/);
   assert.match(providerRequest.body.htmlContent, /role="presentation"/);
   assert.match(providerRequest.body.htmlContent, /&lt;script&gt;cores vivas&lt;\/script&gt;/);
   assert.doesNotMatch(providerRequest.body.htmlContent, /<script>cores vivas<\/script>/);
@@ -193,6 +272,267 @@ test('valid enquiry sends its details through Brevo to the Discovery Box inbox',
   assert.ok(apiLogs.some((entry) => entry.includes('[api] Brevo send_enquiry_email: started')));
   assert.ok(apiLogs.some((entry) => entry.includes('[api] Brevo send_enquiry_email: succeeded')));
   assert.ok(apiLogs.every((entry) => !entry.includes('ana@example.com') && !entry.includes('test-brevo-key')));
+});
+
+test('gift recommendations return AI-ranked live products with validated match scores', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalInfo = console.info;
+  const apiLogs: string[] = [];
+  const initialOllamaContent = JSON.stringify({
+    message: 'For the curious child who loves painting, these playful birthday ideas bring creativity and discovery together.',
+    recommendations: [
+      { product_id: 'child-figure', match_score: 94, reason: 'Its creative figure suits a child who enjoys painting.' },
+      { product_id: 'expensive-game', match_score: 91, reason: 'A fun game for a child.' },
+      { product_id: 'unknown-product', match_score: 90, reason: 'Not in the live catalogue.' },
+      { product_id: 'child-figure', match_score: 90, reason: 'Duplicate recommendation.' },
+    ],
+  });
+  let ollamaContent = initialOllamaContent;
+  const ollamaRequest: { body: { messages: { content: string }[] }; authorization: string | null; format?: unknown } = {
+    body: { messages: [] },
+    authorization: null,
+  };
+  let firstPrompt = '';
+  process.env.SUPABASE_URL = 'https://recommendations-test.supabase.co';
+  process.env.SUPABASE_PUBLISHABLE_KEY = 'test-public-key';
+  process.env.OLLAMA_API_KEY = 'test-ollama-key';
+  console.info = (...data: Parameters<typeof console.info>) => {
+    apiLogs.push(data.map((entry) => typeof entry === 'string' ? entry : JSON.stringify(entry)).join(' '));
+  };
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url.includes('/rest/v1/public_catalog_items')) {
+      return new Response(JSON.stringify([
+        {
+          id: 'child-figure',
+          family: 'PLAY',
+          collection: 'DISCOVERY FRIENDS',
+          category: 'Figures',
+          name_en: 'Paintable figure',
+          name_pt: 'Figura para pintar',
+          description_en: 'A creative figure for children to paint.',
+          description_pt: 'Uma figura criativa para crianças pintarem.',
+          price_mzn: 1200,
+        },
+        {
+          id: 'expensive-game',
+          family: 'PLAY',
+          collection: 'DISCOVERY CHALLENGES',
+          category: 'Games',
+          name_en: 'Premium Game Set',
+          name_pt: 'Conjunto de jogos premium',
+          description_en: 'A premium board game set.',
+          description_pt: 'Um conjunto premium de jogos de tabuleiro.',
+          price_mzn: 6500,
+        },
+      ]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (url === 'https://ollama.com/api/chat') {
+      const requestBody = JSON.parse(String(init?.body)) as typeof ollamaRequest.body;
+      ollamaRequest.body.messages = requestBody.messages;
+      ollamaRequest.format = JSON.parse(String(init?.body)).format;
+      firstPrompt ||= requestBody.messages[0]?.content || '';
+      ollamaRequest.authorization = new Headers(init?.headers).get('Authorization');
+      return new Response(JSON.stringify({
+        message: { content: ollamaContent === initialOllamaContent
+          ? `\`\`\`json\n${ollamaContent}\n\`\`\``
+          : ollamaContent },
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const response = await fetch(`${baseUrl}/api/gift-recommendations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        language: 'en',
+        occasion: 'Anniversary: school graduation',
+        recipient: 'Children',
+        budget: '2000',
+        preferences: 'Likes painting and animals',
+      }),
+    });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.deepEqual(result.recommendations, [{
+      productId: 'child-figure',
+      matchScore: 94,
+      reason: 'Its creative figure suits a child who enjoys painting.',
+    }]);
+    assert.match(result.message, /curious child who loves painting/);
+
+    ollamaContent = JSON.stringify({
+      message: 'A playful birthday selection.',
+      recommendations: [
+        { product_id: 'child-figure', match_score: 70, reason: 'Creative and playful.' },
+        { product_id: 'child-figure', match_score: 65, reason: 'Duplicate.' },
+      ],
+    });
+    const alternateShapeResponse = await fetch(`${baseUrl}/api/gift-recommendations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        language: 'en',
+        occasion: 'Birthday',
+        recipient: 'Child',
+        budget: '',
+        preferences: 'Enjoys painting',
+      }),
+    });
+    assert.equal(alternateShapeResponse.status, 200);
+    const alternateResult = await alternateShapeResponse.json();
+    assert.deepEqual(alternateResult.recommendations, [{
+      productId: 'child-figure',
+      matchScore: 70,
+      reason: 'Creative and playful.',
+    }]);
+    assert.match(alternateResult.message, /playful birthday/i);
+
+    ollamaContent = JSON.stringify({ message: 'Thoughtful ideas for a birthday.', recommendations: [] });
+    const unusableShapeResponse = await fetch(`${baseUrl}/api/gift-recommendations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        language: 'en',
+        occasion: 'Birthday',
+        recipient: 'Child',
+        budget: '',
+        preferences: 'Enjoys painting',
+      }),
+    });
+    assert.equal(unusableShapeResponse.status, 200);
+    const unusableResult = await unusableShapeResponse.json();
+    assert.deepEqual(unusableResult.recommendations, []);
+    assert.equal(unusableResult.message, 'Thoughtful ideas for a birthday.');
+
+    ollamaContent = 'I recommend the Paintable figure for this birthday.';
+    const malformedContentResponse = await fetch(`${baseUrl}/api/gift-recommendations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        language: 'en',
+        occasion: 'Birthday',
+        recipient: 'Child',
+        budget: '',
+        preferences: 'Enjoys painting',
+      }),
+    });
+    assert.equal(malformedContentResponse.status, 502);
+
+    ollamaContent = JSON.stringify({
+      message: 'Ideas for a curious child.',
+      recommendations: [
+        { product_id: 'expensive-game', match_score: 98, reason: 'A great game.' },
+        { product_id: 'child-figure', match_score: 87, reason: 'Creative painting activity.' },
+      ],
+    });
+    const budgetResponse = await fetch(`${baseUrl}/api/gift-recommendations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        language: 'en',
+        occasion: 'Birthday',
+        recipient: 'Child',
+        budget: '2000',
+        preferences: 'Enjoys painting and games',
+      }),
+    });
+    assert.equal(budgetResponse.status, 200);
+    assert.deepEqual((await budgetResponse.json()).recommendations, [{
+      productId: 'child-figure',
+      matchScore: 87,
+      reason: 'Creative painting activity.',
+    }]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.info = originalInfo;
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_PUBLISHABLE_KEY;
+    delete process.env.OLLAMA_API_KEY;
+  }
+
+  assert.equal(ollamaRequest.authorization, 'Bearer test-ollama-key');
+  const modelPrompt = firstPrompt;
+  assert.match(modelPrompt, /Children/);
+  assert.match(modelPrompt, /Likes painting and animals/);
+  assert.match(modelPrompt, /personal 2-3 sentence introduction/);
+  assert.match(modelPrompt, /at or below the stated budget/);
+  assert.match(modelPrompt, /match_score/);
+  assert.ok(ollamaRequest.format && JSON.stringify(ollamaRequest.format).includes('match_score'));
+  assert.match(modelPrompt, /child-figure/);
+  assert.doesNotMatch(modelPrompt, /@example\.com|Ana Example/);
+  assert.ok(apiLogs.some((entry) => entry.includes('[api] Ollama gift_recommendations: succeeded')));
+  assert.ok(apiLogs.some((entry) => entry.includes('[gift-recommendations] catalogue_rows_sent_to_ollama') &&
+    entry.includes('Paintable figure')));
+  assert.ok(apiLogs.some((entry) => entry.includes('[gift-recommendations] ollama_raw_response') &&
+    entry.includes('unknown-product')));
+  assert.ok(apiLogs.some((entry) => entry.includes('[gift-recommendations] recommendation_mapping') &&
+    entry.includes('accepted_product_rows')));
+});
+
+test('gift recommendation network failures identify the failed provider stage', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalInfo = console.info;
+  const originalError = console.error;
+  const logs: string[] = [];
+  process.env.SUPABASE_URL = 'https://recommendations-test.supabase.co';
+  process.env.SUPABASE_PUBLISHABLE_KEY = 'test-public-key';
+  process.env.OLLAMA_API_KEY = 'test-ollama-key';
+  console.info = (...data: Parameters<typeof console.info>) => {
+    logs.push(data.map((entry) => typeof entry === 'string' ? entry : JSON.stringify(entry)).join(' '));
+  };
+  console.error = (...data: Parameters<typeof console.error>) => {
+    logs.push(data.map((entry) => typeof entry === 'string' ? entry : JSON.stringify(entry)).join(' '));
+  };
+  globalThis.fetch = async (input, init) => {
+    if (String(input).includes('/rest/v1/public_catalog_items')) {
+      return new Response(JSON.stringify([{
+        id: 'child-figure',
+        family: 'PLAY',
+        collection: 'DISCOVERY FRIENDS',
+        category: 'Figures',
+        name_en: 'Paintable figure',
+        name_pt: 'Figura para pintar',
+        description_en: 'A creative figure for children to paint.',
+        description_pt: 'Uma figura criativa para crianças pintarem.',
+        price_mzn: 1200,
+      }]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (String(input) === 'https://ollama.com/api/chat') {
+      throw Object.assign(new TypeError('fetch failed'), {
+        cause: Object.assign(new Error('connection reset'), { code: 'ECONNRESET' }),
+      });
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const response = await fetch(`${baseUrl}/api/gift-recommendations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        language: 'en',
+        occasion: 'Birthday',
+        recipient: 'Child',
+        budget: '',
+        preferences: 'Enjoys painting',
+      }),
+    });
+    assert.equal(response.status, 502);
+    assert.match((await response.json()).error, /temporarily unavailable/i);
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.info = originalInfo;
+    console.error = originalError;
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_PUBLISHABLE_KEY;
+    delete process.env.OLLAMA_API_KEY;
+  }
+
+  assert.ok(logs.some((entry) => entry.includes('network_failure') &&
+    entry.includes('"stage":"request"') && entry.includes('"causeCode":"ECONNRESET"')));
 });
 
 test('Brevo rejection logs safe provider diagnostics and returns a delivery error', async () => {

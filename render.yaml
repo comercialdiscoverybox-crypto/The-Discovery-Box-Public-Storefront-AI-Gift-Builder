@@ -21,3 +21,7 @@ services:
         sync: false
       - key: BREVO_FROM_NAME
         sync: false
+      - key: PUBLIC_CONTACT_EMAIL
+        sync: false
+      - key: PUBLIC_WHATSAPP_URL
+        sync: false
