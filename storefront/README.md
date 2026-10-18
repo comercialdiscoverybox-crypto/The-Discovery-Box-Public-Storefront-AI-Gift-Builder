@@ -25,8 +25,11 @@ The root [`../render.yaml`](../render.yaml) defines the existing staff service a
 
 - `SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY` (publishable/anonymous key only)
+- `OLLAMA_API_KEY` (Ollama Cloud key; server-side only)
 
 Add `RESEND_API_KEY`, `ENQUIRY_FROM_EMAIL`, and `ENQUIRY_TO_EMAIL` to enable email-only enquiries. Add `PUBLIC_CONTACT_EMAIL` and `PUBLIC_WHATSAPP_URL` only after confirming the public contact details. Image generation is disabled by default; only after a provider budget and quota are approved, add `GEMINI_API_KEY` and set `AI_IMAGE_ENABLED=true`.
+
+The floating Discovery Assistant sends chat messages to Ollama Cloud using the server-side `OLLAMA_API_KEY` environment variable and the `gemma4:31b-cloud` model. Never add this key to browser code or a `VITE_*` variable. The assistant instructions and editable business knowledge base are in [`assistant-knowledge.md`](./assistant-knowledge.md); public catalogue details are fetched server-side for each chat request. Customer messages are sent to Ollama to generate replies, so review the privacy notice before launch. Chat is rate-limited per process and is intended for the current preview deployment.
 
 Email enquiries and image generation return an explicit unavailable response until their provider credentials and addresses are configured. The gift brief is emailed to the configured destination. Customer contact details are not sent to Gemini; only gift preferences and selected public product names are sent when the customer requests an illustrative image. Generated images are not stored on the Render filesystem.
 

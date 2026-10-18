@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useState, type CSSProperties, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import AssistantWidget from './AssistantWidget';
 
 type Language = 'en' | 'pt';
 type Theme = 'light' | 'dark';
@@ -161,7 +162,7 @@ const copy = {
     instagramQrAlt: 'Instagram QR code for @the_discoverybox',
     contactOptions: 'Contact options are being confirmed. You can still send an enquiry using the gift builder.',
     privacyTitle: 'Privacy notice',
-    privacyBody: 'We use the contact details and gift brief you submit only to respond to your enquiry. Your contact details are sent to our enquiry email provider and are not sent to the image-generation provider. If you choose to request an illustrative image, only your gift preferences and selected public product names are sent to the AI provider. This site stores your language choice in your browser. Please do not include sensitive personal information in the gift brief.',
+    privacyBody: 'We use the contact details and gift brief you submit only to respond to your enquiry. If you use the chat assistant, your messages are sent to Ollama to generate a response; please do not include sensitive personal information. Your contact details are sent to our enquiry email provider and are not sent to the image-generation provider. If you choose to request an illustrative image, only your gift preferences and selected public product names are sent to the AI provider. This site stores your language choice in your browser.',
     termsTitle: 'Important information',
     termsBody: 'Product availability, contents, personalization, prices and delivery details are confirmed by The Discovery Box. Gift-builder selections and generated images are suggestions only and do not create an order or a binding offer. No online payment or order reservation is available on this website.',
     occasions: ['Birthday', 'Anniversary', 'Thank you', 'New baby', 'Celebration', 'Corporate event', 'Something else'],
@@ -298,7 +299,7 @@ const copy = {
     instagramQrAlt: 'Código QR do Instagram para @the_discoverybox',
     contactOptions: 'Os contactos estão a ser confirmados. Ainda pode enviar um pedido através do criador de presentes.',
     privacyTitle: 'Aviso de privacidade',
-    privacyBody: 'Utilizamos os contactos e a descrição enviados apenas para responder ao seu pedido. Os seus contactos são enviados ao nosso serviço de email e não são enviados ao serviço de criação de imagens. Se pedir uma imagem ilustrativa, apenas as preferências e os nomes dos produtos públicos selecionados são enviados ao fornecedor de IA. Este site guarda a sua preferência de idioma no navegador. Não inclua informações pessoais sensíveis na descrição.',
+    privacyBody: 'Utilizamos os contactos e a descrição enviados apenas para responder ao seu pedido. Se utilizar o assistente de conversa, as suas mensagens são enviadas à Ollama para gerar uma resposta; não inclua informações pessoais sensíveis. Os seus contactos são enviados ao nosso serviço de email e não são enviados ao serviço de criação de imagens. Se pedir uma imagem ilustrativa, apenas as preferências e os nomes dos produtos públicos selecionados são enviados ao fornecedor de IA. Este site guarda a sua preferência de idioma no navegador.',
     termsTitle: 'Informações importantes',
     termsBody: 'A disponibilidade, os conteúdos, a personalização, os preços e a entrega são confirmados pela The Discovery Box. As seleções e imagens geradas são apenas sugestões e não constituem uma encomenda ou oferta vinculativa. Este website não permite pagamentos nem reserva de encomendas.',
     occasions: ['Aniversário', 'Aniversário de relacionamento', 'Agradecimento', 'Nascimento', 'Celebração', 'Evento empresarial', 'Outra ocasião'],
@@ -842,19 +843,8 @@ function App() {
   }
 
   return (
+    <>
     <div className="site-shell" onClick={handleInternalNavigation}>
-      {catalogState === 'loading' && (
-        <div className="startup-loader" role="status" aria-live="polite">
-          <div className="startup-loader-card">
-            <img src="/official-logo.png" alt="The Discovery Box" />
-            <strong>{t.loadingHint}</strong>
-            <p>{t.loading}</p>
-            <div className="startup-loader-track" role="progressbar" aria-label={t.loading} aria-valuetext={t.loading}>
-              <div className="startup-loader-bar" />
-            </div>
-          </div>
-        </div>
-      )}
       <header className="site-header">
         <a className="brand" href="/" aria-label="The Discovery Box home">
           <img src="/official-logo.png" alt="" />
@@ -909,6 +899,8 @@ function App() {
         <div className="footer-bottom"><span>© {new Date().getFullYear()} The Discovery Box</span><div><a href="/privacy">{t.privacy}</a><a href="/terms">{t.terms}</a><a href="/contact">{t.navContact}</a></div></div>
       </footer>
     </div>
+    <AssistantWidget language={language} />
+    </>
   );
 }
 
