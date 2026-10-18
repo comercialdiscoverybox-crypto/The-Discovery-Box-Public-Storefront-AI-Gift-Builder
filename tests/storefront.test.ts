@@ -98,6 +98,91 @@ test('public config returns configured contact details and validates their forma
   }
 });
 
+test('analytics endpoint rejects unapproved fields and query-bearing paths', async () => {
+  const invalidProperties = await fetch(`${baseUrl}/api/analytics/events`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId: '2e7c7d5e-3e88-4a60-9a2b-6ff527918f10',
+      eventName: 'shop_search',
+      pagePath: '/shop',
+      properties: { queryLength: 12, resultCount: 4, query: 'private search terms' },
+    }),
+  });
+  assert.equal(invalidProperties.status, 400);
+
+  const queryPath = await fetch(`${baseUrl}/api/analytics/events`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId: '2e7c7d5e-3e88-4a60-9a2b-6ff527918f10',
+      eventName: 'page_view',
+      pagePath: '/shop?q=private',
+      properties: { language: 'en' },
+    }),
+  });
+  assert.equal(queryPath.status, 400);
+});
+
+test('analytics endpoint reports unavailable storage instead of accepting an event', async () => {
+  const response = await fetch(`${baseUrl}/api/analytics/events`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId: '2e7c7d5e-3e88-4a60-9a2b-6ff527918f10',
+      eventName: 'page_view',
+      pagePath: '/shop',
+      properties: { language: 'en' },
+    }),
+  });
+  assert.equal(response.status, 503);
+  assert.match((await response.json()).error, /not configured/i);
+});
+
+test('analytics endpoint stores only allowlisted event data', async () => {
+  const originalFetch = globalThis.fetch;
+  let storedEvent: Record<string, unknown> | null = null;
+  process.env.SUPABASE_URL = 'https://website-analytics-test.supabase.co';
+  process.env.SUPABASE_PUBLISHABLE_KEY = 'test-public-key';
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url.includes('/rest/v1/website_analytics_events')) {
+      assert.equal(init?.method, 'POST');
+      storedEvent = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response(null, { status: 201 });
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const response = await originalFetch(`${baseUrl}/api/analytics/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: '2e7c7d5e-3e88-4a60-9a2b-6ff527918f10',
+        eventName: 'shop_search',
+        pagePath: '/shop',
+        referrerOrigin: 'https://search.example',
+        properties: { queryLength: 18, resultCount: 3 },
+      }),
+    });
+    assert.equal(response.status, 202);
+    assert.deepEqual(await response.json(), { status: 'recorded' });
+  } finally {
+    globalThis.fetch = originalFetch;
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_PUBLISHABLE_KEY;
+  }
+
+  assert.deepEqual(storedEvent, {
+    session_id: '2e7c7d5e-3e88-4a60-9a2b-6ff527918f10',
+    event_name: 'shop_search',
+    page_path: '/shop',
+    referrer_origin: 'https://search.example',
+    properties: { query_length: 18, result_count: 3 },
+  });
+});
+
 test('catalogue storage paths become public Supabase Storage URLs', () => {
   assert.equal(
     toPublicCatalogImageUrl(
@@ -1149,5 +1234,20 @@ test('problem report migration keeps submissions private and requires report fol
   assert.match(migration, /ADD COLUMN email TEXT/);
   assert.match(migration, /submission_type = 'problem'[\s\S]*email IS NOT NULL/);
   assert.match(migration, /REVOKE ALL ON TABLE public\.customer_reviews FROM PUBLIC, anon, authenticated/);
+  assert.doesNotMatch(migration, /GRANT SELECT/);
+});
+
+test('website analytics migration limits public access to safe insert-only events', () => {
+  const migration = readFileSync(path.join(
+    process.cwd(),
+    'supabase',
+    'migrations',
+    '20261019010000_website_analytics_events.sql',
+  ), 'utf8');
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.website_analytics_events/);
+  assert.match(migration, /ALTER TABLE public\.website_analytics_events ENABLE ROW LEVEL SECURITY/);
+  assert.match(migration, /GRANT INSERT \([\s\S]*\)\s+ON TABLE public\.website_analytics_events TO anon, authenticated/);
+  assert.match(migration, /properties - 'product_id' - 'family'[\s\S]*product_id[\s\S]*family/);
+  assert.match(migration, /properties - 'query_length' - 'result_count'[\s\S]*query_length[\s\S]*result_count/);
   assert.doesNotMatch(migration, /GRANT SELECT/);
 });

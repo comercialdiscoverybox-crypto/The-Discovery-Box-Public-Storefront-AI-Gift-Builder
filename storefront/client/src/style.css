@@ -547,7 +547,7 @@ h1, h2, h3 { font-family: Manrope, sans-serif; letter-spacing: -.04em; }
 }
 .corporate-collections-section .editorial-collections {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   justify-content: center;
   gap: 12px;
   margin: 0;
@@ -564,8 +564,8 @@ h1, h2, h3 { font-family: Manrope, sans-serif; letter-spacing: -.04em; }
   transition: transform .18s, border-color .18s;
 }
 .editorial-collection:hover { transform: translateY(-2px); border-color: var(--turquoise); }
-.editorial-collection > span:first-child { color: #138f89; font-size: 9px; font-weight: 800; letter-spacing: .12em; }
-.editorial-collection strong { color: var(--ink); font-family: Manrope, sans-serif; font-size: 14px; }
+.editorial-collection > span:first-child { color: #138f89; font-size: 9px; font-weight: 800; letter-spacing: .12em; white-space: nowrap; }
+.editorial-collection strong { color: var(--ink); font-family: Manrope, sans-serif; font-size: 12px; white-space: nowrap; }
 .editorial-collection > span:last-child { grid-column: 2; grid-row: 1 / span 2; align-self: center; color: var(--coral); font-size: 20px; }
 .about-page { max-width: 1080px; }
 .about-lead { max-width: 760px; margin-bottom: 74px; }

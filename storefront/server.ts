@@ -215,6 +215,173 @@ app.get('/api/public-config', (_req, res) => {
   });
 });
 
+app.post('/api/analytics/events', rateLimit(120, 15 * 60 * 1000), async (req, res) => {
+  const { sessionId, eventName, pagePath, referrerOrigin = '', properties = {} } = req.body || {};
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const allowedEvents = new Set([
+    'page_view',
+    'product_view',
+    'shop_search',
+    'shop_filter',
+    'gift_builder_step',
+    'enquiry_submitted',
+    'feedback_submitted',
+    'assistant_open',
+    'contact_click',
+    'faq_expand',
+  ]);
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' && value !== null && !Array.isArray(value);
+  const hasKeys = (value: Record<string, unknown>, keys: string[]) =>
+    Object.keys(value).every((key) => keys.includes(key)) &&
+    keys.every((key) => Object.hasOwn(value, key));
+  const isBoundedInteger = (value: unknown, min: number, max: number) =>
+    typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max;
+
+  let validatedPath = '';
+  if (typeof pagePath === 'string' && pagePath.startsWith('/') && !pagePath.startsWith('//') && pagePath.length <= 300) {
+    try {
+      const parsedPath = new URL(pagePath, 'https://storefront.invalid');
+      if (!parsedPath.search && !parsedPath.hash && parsedPath.pathname === pagePath) validatedPath = parsedPath.pathname;
+    } catch {
+      validatedPath = '';
+    }
+  }
+
+  let sanitizedReferrer: string | null = null;
+  if (typeof referrerOrigin === 'string' && referrerOrigin.length <= 300 && referrerOrigin) {
+    try {
+      const parsedReferrer = new URL(referrerOrigin);
+      if ((parsedReferrer.protocol === 'http:' || parsedReferrer.protocol === 'https:') &&
+        parsedReferrer.origin === referrerOrigin) {
+        sanitizedReferrer = parsedReferrer.origin;
+      }
+    } catch {
+      sanitizedReferrer = null;
+    }
+  }
+
+  let sanitizedProperties: Record<string, string | number> | null = null;
+  if (isRecord(properties)) {
+    switch (eventName) {
+      case 'page_view':
+        if (hasKeys(properties, ['language']) && ['en', 'pt'].includes(String(properties.language))) {
+          sanitizedProperties = { language: properties.language as string };
+        }
+        break;
+      case 'product_view':
+        if (hasKeys(properties, ['productId', 'family']) &&
+          typeof properties.productId === 'string' && /^[A-Za-z0-9_-]{1,120}$/.test(properties.productId) &&
+          ['PLAY', 'HOME', 'BUSINESS'].includes(String(properties.family))) {
+          sanitizedProperties = { product_id: properties.productId, family: properties.family as string };
+        }
+        break;
+      case 'shop_search':
+        if (hasKeys(properties, ['queryLength', 'resultCount']) &&
+          isBoundedInteger(properties.queryLength, 0, 200) &&
+          isBoundedInteger(properties.resultCount, 0, 10000)) {
+          sanitizedProperties = {
+            query_length: properties.queryLength as number,
+            result_count: properties.resultCount as number,
+          };
+        }
+        break;
+      case 'shop_filter':
+        if (hasKeys(properties, ['filterType']) &&
+          ['family', 'collection', 'category', 'sort'].includes(String(properties.filterType))) {
+          sanitizedProperties = { filter_type: properties.filterType as string };
+        }
+        break;
+      case 'gift_builder_step':
+        if (hasKeys(properties, ['step']) && isBoundedInteger(properties.step, 1, 3)) {
+          sanitizedProperties = { step: properties.step as number };
+        }
+        break;
+      case 'enquiry_submitted':
+        if (hasKeys(properties, ['productCount', 'language']) &&
+          isBoundedInteger(properties.productCount, 0, 5) &&
+          ['en', 'pt'].includes(String(properties.language))) {
+          sanitizedProperties = {
+            product_count: properties.productCount as number,
+            language: properties.language as string,
+          };
+        }
+        break;
+      case 'feedback_submitted':
+        if (hasKeys(properties, ['submissionType']) &&
+          ['review', 'problem'].includes(String(properties.submissionType))) {
+          sanitizedProperties = { submission_type: properties.submissionType as string };
+        }
+        break;
+      case 'assistant_open':
+        if (hasKeys(properties, [])) sanitizedProperties = {};
+        break;
+      case 'contact_click':
+        if (hasKeys(properties, ['method']) && ['email', 'whatsapp'].includes(String(properties.method))) {
+          sanitizedProperties = { method: properties.method as string };
+        }
+        break;
+      case 'faq_expand':
+        if (hasKeys(properties, ['questionIndex']) && isBoundedInteger(properties.questionIndex, 0, 20)) {
+          sanitizedProperties = { question_index: properties.questionIndex as number };
+        }
+        break;
+    }
+  }
+
+  if (
+    typeof sessionId !== 'string' || !uuidPattern.test(sessionId) ||
+    typeof eventName !== 'string' || !allowedEvents.has(eventName) ||
+    !validatedPath || sanitizedProperties === null ||
+    (referrerOrigin !== '' && sanitizedReferrer === null)
+  ) {
+    res.status(400).json({ error: 'Invalid analytics event.' });
+    return;
+  }
+  const supabase = getPublicSupabase();
+  if (!supabase) {
+    res.status(503).json({ error: 'Analytics storage is not configured.' });
+    return;
+  }
+
+  const startedAt = Date.now();
+  logApiCall('Supabase', 'store_website_analytics_event', 'started');
+  try {
+    const { error } = await supabase.from('website_analytics_events').insert({
+      session_id: sessionId,
+      event_name: eventName,
+      page_path: validatedPath,
+      referrer_origin: sanitizedReferrer,
+      properties: sanitizedProperties,
+    });
+    if (error) {
+      const code = typeof error.code === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(error.code)
+        ? error.code
+        : 'unknown';
+      logApiCall('Supabase', 'store_website_analytics_event', 'failed', {
+        durationMs: Date.now() - startedAt,
+        code,
+      });
+      console.error('Supabase could not store website analytics', { code });
+      res.status(503).json({ error: 'Analytics event could not be stored.' });
+      return;
+    }
+    logApiCall('Supabase', 'store_website_analytics_event', 'succeeded', {
+      durationMs: Date.now() - startedAt,
+    });
+    res.status(202).json({ status: 'recorded' });
+  } catch (error) {
+    logApiCall('Supabase', 'store_website_analytics_event', 'failed', {
+      durationMs: Date.now() - startedAt,
+      reason: 'network',
+    });
+    console.error('Supabase could not be reached to store website analytics', {
+      errorName: error instanceof Error ? error.name : 'unknown',
+    });
+    res.status(503).json({ error: 'Analytics event could not be stored.' });
+  }
+});
+
 app.post('/api/reviews', rateLimit(5, 15 * 60 * 1000), async (req, res) => {
   const {
     submissionType,

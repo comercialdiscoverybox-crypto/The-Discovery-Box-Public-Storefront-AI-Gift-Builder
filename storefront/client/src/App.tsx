@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import AssistantWidget from './AssistantWidget';
 import type { AssistantGiftDraft } from './assistantTypes';
+import { trackAnalyticsEvent } from './analytics';
 import { getCanonicalSearchParams, getPageMetadata } from '../../pageMetadata';
 
 type Language = 'en' | 'pt';
@@ -286,6 +287,7 @@ const copy = {
         title: 'Information stored in your browser',
         paragraphs: [
           'The website stores your language and light/dark theme preferences in your browser’s local storage. These preferences help the site remember your choices and are not part of your gift enquiry.',
+          'We also record privacy-conscious website analytics, such as page views and selected interactions (for example, searches by query length, filters, product views, and builder steps). Analytics include a random identifier kept in this browser tab for its session, the page path without query strings or fragments, the referring website origin, and limited event details. A session represents a browser tab, not a verified unique person, and does not connect activity across devices. Search text, chat messages, form contents, contact details, and visitor IP addresses are not stored in the analytics table. The data is used to understand visits and engagement; a retention period still needs to be decided and approved.',
         ],
       },
       {
@@ -599,6 +601,7 @@ const copy = {
         title: 'Informações guardadas no navegador',
         paragraphs: [
           'O website guarda no armazenamento local do navegador as suas preferências de idioma e de tema claro/escuro. Estas preferências ajudam o website a recordar as suas escolhas e não fazem parte do pedido de presente.',
+          'Também registamos análises do website que respeitam a privacidade, como visualizações de páginas e algumas interações (por exemplo, pesquisas através do comprimento do texto, filtros, visualizações de produtos e etapas do criador). As análises incluem um identificador aleatório guardado neste separador do navegador durante a sessão, o caminho da página sem parâmetros nem fragmentos, a origem do website de referência e detalhes limitados do evento. Uma sessão representa um separador do navegador, não uma pessoa única verificada, e não associa atividade entre dispositivos. O texto pesquisado, mensagens do chat, conteúdo dos formulários, dados de contacto e endereços IP não são guardados na tabela de análises. Os dados ajudam a compreender as visitas e a interação; o período de conservação ainda precisa de ser decidido e aprovado.',
         ],
       },
       {
@@ -703,10 +706,18 @@ function App() {
   const [catalog, setCatalog] = useState<CatalogResponse>({ items: [], collections: [] });
   const [catalogState, setCatalogState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [contact, setContact] = useState<{ email: string; whatsapp: string }>({ email: '', whatsapp: '' });
+  const lastAnalyticsPathRef = useRef('');
+  const lastAnalyticsProductRef = useRef('');
   const clearAssistantGiftDraft = useCallback(() => setAssistantGiftDraft(null), []);
   const t = copy[language];
   const currentLocation = new URL(currentUrl, window.location.origin);
   const path = currentLocation.pathname.replace(/\/+$/, '') || '/';
+
+  useEffect(() => {
+    if (lastAnalyticsPathRef.current === path) return;
+    lastAnalyticsPathRef.current = path;
+    trackAnalyticsEvent('page_view', path, { language });
+  }, [language, path]);
 
   const navigateInternal = (url: string) => {
     const destination = new URL(url, window.location.origin);
@@ -734,12 +745,36 @@ function App() {
   }, []);
 
   const handleInternalNavigation = (event: ReactMouseEvent<HTMLDivElement>) => {
-    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (event.defaultPrevented || event.button !== 0) return;
     if (!(event.target instanceof Element)) return;
     const anchor = event.target.closest('a[href]');
-    if (!(anchor instanceof HTMLAnchorElement) || anchor.hasAttribute('download') || (anchor.target && anchor.target !== '_self')) return;
+    if (!(anchor instanceof HTMLAnchorElement) || anchor.hasAttribute('download')) return;
+
+    if (anchor.href.startsWith('mailto:')) {
+      trackAnalyticsEvent('contact_click', path, { method: 'email' });
+      return;
+    }
+    try {
+      const linkedUrl = new URL(anchor.href);
+      if (linkedUrl.hostname === 'wa.me' || linkedUrl.hostname === 'api.whatsapp.com') {
+        trackAnalyticsEvent('contact_click', path, { method: 'whatsapp' });
+        return;
+      }
+      if (linkedUrl.origin !== window.location.origin) return;
+    } catch {
+      return;
+    }
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || (anchor.target && anchor.target !== '_self')) return;
 
     event.preventDefault();
+    const destination = new URL(anchor.href, window.location.origin);
+    if (destination.pathname === '/shop') {
+      const currentParams = currentLocation.searchParams;
+      const nextParams = destination.searchParams;
+      const changedFilter = (['family', 'collection', 'category', 'sort'] as const)
+        .find((key) => currentParams.get(key) !== nextParams.get(key));
+      if (changedFilter) trackAnalyticsEvent('shop_filter', '/shop', { filterType: changedFilter });
+    }
     navigateInternal(anchor.href);
   };
 
@@ -786,6 +821,18 @@ function App() {
   const selectedItemId = path.startsWith('/product/') ? decodeURIComponent(path.slice('/product/'.length)) : '';
   const selectedItem = itemById.get(selectedItemId);
   const [selectedProductImages, setSelectedProductImages] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (!selectedItem) {
+      lastAnalyticsProductRef.current = '';
+      return;
+    }
+    if (lastAnalyticsProductRef.current === selectedItem.id) return;
+    lastAnalyticsProductRef.current = selectedItem.id;
+    trackAnalyticsEvent('product_view', path, {
+      productId: selectedItem.id,
+      family: selectedItem.family,
+    });
+  }, [path, selectedItem]);
   const productImage = (item: CatalogItem) => item.images?.[item.primary_image_index] || item.images?.[0] || '';
   const imageStyle = (item: CatalogItem, index: number): CSSProperties => {
     const crop = item.image_crops?.[index];
@@ -1054,6 +1101,27 @@ function App() {
       const formFamily = String(formData.get('family') || '');
       const formCollection = String(formData.get('collection') || '');
       const formCategory = String(formData.get('category') || '');
+      const normalizedSubmittedQuery = normalizeSearchText(query);
+      const searchResultCount = normalizedSubmittedQuery
+        ? categoryItems.filter((item) => {
+          const collection = collectionForItem(item);
+          return normalizeSearchText([
+            item.id,
+            item.family,
+            item.name_en,
+            item.name_pt,
+            item.description_en,
+            item.description_pt,
+            item.category || '',
+            collection?.name_en || '',
+            collection?.name_pt || '',
+          ].join(' ')).includes(normalizedSubmittedQuery);
+        }).length
+        : categoryItems.length;
+      trackAnalyticsEvent('shop_search', '/shop', {
+        queryLength: query.length,
+        resultCount: searchResultCount,
+      });
       if (query) params.set('q', query);
       if (selectedSort !== 'featured') params.set('sort', selectedSort);
       if (formFamily) params.set('family', formFamily);
@@ -1196,7 +1264,7 @@ function App() {
                   </nav>
                 )}
               </>
-            ) : <p className="notice">{searchQuery ? t.shopNoResults(searchQuery) : t.empty}{searchQuery && <> <a className="text-link" href={shopFilterUrl({ q: null })}>{t.clearShopSearch}</a></>}</p>)}
+            ) : <p className="notice">{searchQuery ? t.shopNoResults(searchQuery) : t.empty}{searchQuery && <> <a className="text-link" href={shopFilterUrl({ q: null })} onClick={() => trackAnalyticsEvent('shop_search', '/shop', { queryLength: 0, resultCount: categoryItems.length })}>{t.clearShopSearch}</a></>}</p>)}
           </div>
           <div className="shop-guidance"><EnquiryGuidance t={t} compact /></div>
         </div>
@@ -1366,7 +1434,11 @@ function App() {
         <p className="policy-intro">{t.faqBody}</p>
         <div className="faq-list">
           {t.faqQuestions.map(({ question, answer }) => (
-            <details className="faq-item" key={question}>
+            <details className="faq-item" key={question} onToggle={(event) => {
+              if (event.currentTarget.open) {
+                trackAnalyticsEvent('faq_expand', '/faq', { questionIndex: t.faqQuestions.findIndex((item) => item.question === question) });
+              }
+            }}>
               <summary>{question}</summary>
               <p>{answer}</p>
             </details>
@@ -1465,6 +1537,7 @@ function App() {
     <AssistantWidget
       language={language}
       onNavigate={navigateInternal}
+      onOpen={() => trackAnalyticsEvent('assistant_open', path)}
       onApplyGiftDraft={(draft) => {
         setAssistantGiftDraft(draft);
         navigateInternal('/gift-builder');
@@ -1511,6 +1584,7 @@ function CustomerReviews({ language, t }: { language: Language; t: typeof copy[L
         return;
       }
       const result = await response.json() as { emailNotified?: boolean };
+      trackAnalyticsEvent('feedback_submitted', '/reviews', { submissionType });
       setSaved(result.emailNotified === true);
     } catch {
       setError(t.reviewError);
@@ -1616,6 +1690,12 @@ function GiftBuilder({
   const [recommendationError, setRecommendationError] = useState('');
   const recommendationRequestRef = useRef(0);
   const appliedAssistantDraftRef = useRef<AssistantGiftDraft | null>(null);
+  const lastTrackedStepRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (lastTrackedStepRef.current === step) return;
+    lastTrackedStepRef.current = step;
+    trackAnalyticsEvent('gift_builder_step', '/gift-builder', { step });
+  }, [step]);
   const productDetailsImages = productDetails?.item.images?.flatMap((src, index) => src ? [{ src, index }] : []) ?? [];
   const activeProductDetailsImagePosition = productDetailsImages.findIndex(({ index }) => index === productDetailsImageIndex);
   const activeProductDetailsImage = productDetailsImages[activeProductDetailsImagePosition];
@@ -1810,6 +1890,10 @@ function GiftBuilder({
             : t.submitError);
         return;
       }
+      trackAnalyticsEvent('enquiry_submitted', '/gift-builder', {
+        productCount: selectedNames.length,
+        language,
+      });
       setSent(true);
     } catch {
       setError(t.submitError);

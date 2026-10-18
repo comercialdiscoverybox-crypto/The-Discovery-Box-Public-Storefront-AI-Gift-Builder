@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { ReactNode } from 'react';
 import type { AssistantGiftDraft, AssistantGiftFormAction } from './assistantTypes';
+import { trackAnalyticsEvent } from './analytics';
 
 type Language = 'en' | 'pt';
 type Message = {
@@ -12,6 +13,7 @@ type Message = {
 type AssistantWidgetProps = {
   language: Language;
   onNavigate: (url: string) => void;
+  onOpen: () => void;
   onApplyGiftDraft: (draft: AssistantGiftDraft) => void;
 };
 
@@ -195,7 +197,7 @@ function FoxIcon() {
   );
 }
 
-export default function AssistantWidget({ language, onNavigate, onApplyGiftDraft }: AssistantWidgetProps) {
+export default function AssistantWidget({ language, onNavigate, onOpen, onApplyGiftDraft }: AssistantWidgetProps) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
@@ -383,7 +385,10 @@ export default function AssistantWidget({ language, onNavigate, onApplyGiftDraft
         aria-expanded={open}
         onClick={() => {
           if (open) setConfirmClose(true);
-          else setOpen(true);
+          else {
+            onOpen();
+            setOpen(true);
+          }
         }}
       >
         {open
