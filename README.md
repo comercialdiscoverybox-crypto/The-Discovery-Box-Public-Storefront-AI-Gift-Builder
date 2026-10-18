@@ -33,7 +33,7 @@ The [`render.yaml`](./render.yaml) blueprint defines a separate free-plan Node.j
 - Start: `npm run start:storefront`
 - Required environment: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`
 
-Add `BREVO_API_KEY`, `BREVO_FROM_EMAIL`, and `BREVO_FROM_NAME` to enable email enquiries. Enquiries are delivered to `BREVO_FROM_EMAIL`; customer replies go to the email address submitted with the enquiry. Keep the API key server-side and verify the sender address in Brevo. Add public contact variables only after confirming the business contact details. Image generation is disabled by default; enable it only after approving the provider budget and request quota, with `GEMINI_API_KEY` and `AI_IMAGE_ENABLED=true`.
+Add `BREVO_API_KEY`, `BREVO_FROM_EMAIL`, and `BREVO_FROM_NAME` to enable email enquiries. Enquiries are delivered as a responsive HTML email with a print stylesheet for A5 portrait; customer replies go to the email address submitted with the enquiry. Keep the API key server-side and verify the sender address in Brevo. Add public contact variables only after confirming the business contact details. Image generation is disabled by default; enable it only after approving the provider budget and request quota, with `GEMINI_API_KEY` and `AI_IMAGE_ENABLED=true`.
 
 The free Render plan is for preview. Review the draft privacy and terms pages, confirm product/media approvals, and verify live database permissions before launch.
 

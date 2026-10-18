@@ -214,6 +214,7 @@ app.post('/api/assistant/chat', rateLimit(8, 15 * 60 * 1000), async (req, res) =
     'Return form_action "offer" only when the conversation already contains both an occasion and recipient and the latest assistant answer explicitly asks whether the customer wants help filling the gift brief. Return "apply" only when the latest user message clearly and specifically accepts that offer; include the same validated brief. If the customer declines, asks something else, or has not yet shared both occasion and recipient, return "none". Never submit the form; the customer reviews and submits it.',
     'If the customer declines an offer to prefill the form, do not offer again unless they later ask for form-filling help or clearly change their mind.',
     'Return only a JSON object with exactly these keys: answer (Markdown string), form_action ("none", "offer", or "apply"), and form_draft (null or an object with occasion, recipient, budget, preferences, and product_ids). The form_draft must be null for "none"; for "offer" and "apply", occasion and recipient must be non-empty. budget and preferences are strings and product_ids contains only exact IDs from the live catalogue context. Leave unknown optional values empty.',
+    'Never wrap the JSON in Markdown code fences, add an introduction, or show the raw JSON to the customer.',
     '',
     'ASSISTANT KNOWLEDGE BASE:',
     knowledge,
@@ -286,19 +287,52 @@ app.post('/api/assistant/chat', rateLimit(8, 15 * 60 * 1000), async (req, res) =
       status: response.status,
     });
     const result = await response.json() as { message?: { role?: string; content?: string } };
+    const content = typeof result.message?.content === 'string' ? result.message.content.trim() : '';
     let structured: {
       answer?: unknown;
       form_action?: unknown;
       form_draft?: unknown;
-    };
-    try {
-      structured = JSON.parse(result.message?.content || '') as typeof structured;
-    } catch {
-      structured = {};
+    } | null = null;
+    let contentIsJson = false;
+    const jsonCandidates = [content];
+    for (const match of content.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)) {
+      jsonCandidates.push(match[1].trim());
     }
-    const answer = typeof structured.answer === 'string' ? structured.answer.trim() : '';
-    const formAction = structured.form_action;
-    const rawDraft = structured.form_draft;
+    const objectStart = content.indexOf('{');
+    const objectEnd = content.lastIndexOf('}');
+    if (objectStart !== -1 && objectEnd > objectStart) {
+      jsonCandidates.push(content.slice(objectStart, objectEnd + 1));
+    }
+    for (const candidate of jsonCandidates) {
+      try {
+        const parsed = JSON.parse(candidate) as unknown;
+        if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+          structured = parsed as typeof structured;
+          contentIsJson = true;
+          break;
+        }
+      } catch {
+        continue;
+      }
+    }
+    if (!structured && /"answer"\s*:|"form_action"\s*:|```(?:json)?\s*\{/i.test(content)) {
+      const answerMatch = content.match(/"answer"\s*:\s*("(?:\\.|[^"\\])*")/s);
+      if (answerMatch) {
+        try {
+          structured = { answer: JSON.parse(answerMatch[1]) as unknown };
+          contentIsJson = true;
+        } catch {
+          structured = null;
+        }
+      }
+    }
+    const answer = typeof structured?.answer === 'string'
+      ? structured.answer.trim()
+      : contentIsJson || /"answer"\s*:|"form_action"\s*:|```(?:json)?\s*\{/i.test(content)
+        ? ''
+        : content;
+    const formAction = structured?.form_action;
+    const rawDraft = structured?.form_draft;
     const draft = rawDraft && typeof rawDraft === 'object' && !Array.isArray(rawDraft)
       ? rawDraft as Record<string, unknown>
       : null;
@@ -322,11 +356,8 @@ app.post('/api/assistant/chat', rateLimit(8, 15 * 60 * 1000), async (req, res) =
     const validFormAction = formAction === 'none' || formAction === 'offer' || formAction === 'apply';
     const validActionDraft = (formAction === 'none' && rawDraft === null) ||
       ((formAction === 'offer' || formAction === 'apply') && formDraft !== null);
-    if (
-      result.message?.role !== 'assistant' || !answer || answer.length > 4000 ||
-      !validFormAction || !validActionDraft
-    ) {
-      console.error('Ollama assistant provider returned an invalid response');
+    if (result.message?.role !== 'assistant' || !answer || answer.length > 4000) {
+      console.error('Ollama assistant provider returned an invalid answer');
       res.status(502).json({
         error: language === 'pt'
           ? 'O assistente não conseguiu responder agora. Tente novamente.'
@@ -334,10 +365,14 @@ app.post('/api/assistant/chat', rateLimit(8, 15 * 60 * 1000), async (req, res) =
       });
       return;
     }
+    const formMetadataValid = !contentIsJson || (validFormAction && validActionDraft);
+    if (contentIsJson && !formMetadataValid) {
+      console.error('Ollama assistant provider returned invalid optional form metadata');
+    }
     res.json({
       answer,
-      formAction,
-      formDraft,
+      formAction: contentIsJson && formMetadataValid ? formAction : 'none',
+      formDraft: contentIsJson && formMetadataValid ? formDraft : null,
     });
   } catch (error) {
     logApiCall('Ollama', 'assistant_chat', 'failed', {
@@ -435,21 +470,73 @@ app.post('/api/enquiries', rateLimit(5, 15 * 60 * 1000), async (req, res) => {
     return;
   }
 
-  const fields = [
-    ['Name', name.trim()],
-    ['Email', email.trim()],
-    ['Phone', phone.trim() || 'Not provided'],
-    ['Language', language],
-    ['Occasion', occasion],
-    ['Recipient', recipient],
-    ['Budget (MZN)', budget || 'Not provided'],
-    ['Preferences', preferences || 'Not provided'],
-    ['Gift-card message', cardMessage || 'Not provided'],
-    ['Selected public products', products.length ? products.join(', ') : 'None selected'],
-  ];
-  const html = fields.map(([label, value]) =>
-    `<p><strong>${escapeHtml(label)}:</strong><br>${escapeHtml(value).replace(/\n/g, '<br>')}</p>`,
-  ).join('');
+  const isPortuguese = language === 'pt';
+  const text = (value: string) => escapeHtml(value).replace(/\n/g, '<br>');
+  const valueCell = (value: string) =>
+    `<td style="padding:10px 12px;color:#172b4d;font-size:14px;line-height:1.5;word-break:break-word;">${text(value)}</td>`;
+  const detailRow = (label: string, value: string) =>
+    `<tr><td style="width:36%;padding:10px 12px;color:#64748b;font-size:12px;line-height:1.5;vertical-align:top;">${label}</td>${valueCell(value)}</tr>`;
+  const section = (title: string, rows: string) =>
+    `<tr><td style="padding:20px 24px 6px;"><h2 style="margin:0;color:#102a43;font-size:15px;line-height:1.4;">${title}</h2></td></tr>
+     <tr><td style="padding:0 24px 8px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">${rows}</table></td></tr>`;
+  const notProvided = isPortuguese ? 'Não indicado' : 'Not provided';
+  const details = [
+    detailRow(isPortuguese ? 'Nome' : 'Name', name.trim()),
+    detailRow('Email', email.trim()),
+    detailRow(isPortuguese ? 'Telefone' : 'Phone', phone.trim() || notProvided),
+    detailRow(isPortuguese ? 'Idioma' : 'Language', isPortuguese ? 'Português' : 'English'),
+  ].join('');
+  const giftBrief = [
+    detailRow(isPortuguese ? 'Ocasião' : 'Occasion', occasion),
+    detailRow(isPortuguese ? 'Para' : 'For', recipient),
+    detailRow(isPortuguese ? 'Orçamento (MZN)' : 'Budget (MZN)', budget || notProvided),
+  ].join('');
+  const preferencesRow = detailRow(
+    isPortuguese ? 'Preferências' : 'Preferences',
+    preferences.trim() || notProvided,
+  );
+  const messageRow = detailRow(
+    isPortuguese ? 'Mensagem do cartão' : 'Gift-card message',
+    cardMessage.trim() || notProvided,
+  );
+  const selectedProductsRow = detailRow(
+    isPortuguese ? 'Produtos escolhidos' : 'Selected products',
+    products.length ? products.join(', ') : (isPortuguese ? 'Nenhum selecionado' : 'None selected'),
+  );
+  const html = `<!doctype html>
+<html lang="${isPortuguese ? 'pt' : 'en'}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    @page { size: A5 portrait; margin: 10mm; }
+    @media print {
+      body { background: #ffffff !important; }
+      .email-page { width: auto !important; max-width: none !important; margin: 0 !important; box-shadow: none !important; }
+    }
+    @media screen and (max-width: 600px) {
+      .email-gutter { padding-left: 16px !important; padding-right: 16px !important; }
+    }
+  </style>
+</head>
+<body style="margin:0;padding:24px 12px;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" class="email-page" width="100%" cellspacing="0" cellpadding="0" style="width:100%;max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;">
+    <tr><td style="padding:22px 24px;background:#102a43;color:#ffffff;">
+      <p style="margin:0 0 8px;color:#7dd3c7;font-size:11px;font-weight:bold;letter-spacing:1.5px;text-transform:uppercase;">THE DISCOVERY BOX</p>
+      <h1 style="margin:0;color:#ffffff;font-size:22px;line-height:1.3;">${isPortuguese ? 'Novo pedido de presente' : 'New gift enquiry'}</h1>
+      <p style="margin:8px 0 0;color:#d9e8f5;font-size:13px;line-height:1.5;">${isPortuguese ? 'Um novo pedido foi enviado pela loja online.' : 'A new request was sent from the online store.'}</p>
+    </td></tr>
+    ${section(isPortuguese ? 'Contacto' : 'Contact', details)}
+    ${section(isPortuguese ? 'Resumo do presente' : 'Gift brief', giftBrief)}
+    ${section(isPortuguese ? 'Preferências' : 'Preferences', preferencesRow)}
+    ${section(isPortuguese ? 'Mensagem para o cartão' : 'Card message', messageRow)}
+    ${section(isPortuguese ? 'Seleção de produtos' : 'Product selection', selectedProductsRow)}
+    <tr><td style="padding:16px 24px 20px;border-top:1px solid #e2e8f0;color:#64748b;font-size:11px;line-height:1.5;">
+      ${isPortuguese ? 'Responda diretamente a este email para contactar o cliente.' : 'Reply directly to this email to contact the customer.'}
+    </td></tr>
+  </table>
+</body>
+</html>`;
   try {
     const apiStartedAt = Date.now();
     logApiCall('Brevo', 'send_enquiry_email', 'started');

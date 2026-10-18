@@ -179,8 +179,16 @@ test('valid enquiry sends its details through Brevo to the Discovery Box inbox',
   });
   assert.deepEqual(providerRequest.body.to, [{ email: 'comercial.discoverybox@gmail.com' }]);
   assert.deepEqual(providerRequest.body.replyTo, { email: 'ana@example.com' });
+  assert.match(providerRequest.body.htmlContent, /<!doctype html>/i);
+  assert.match(providerRequest.body.htmlContent, /<html lang="pt">/);
+  assert.match(providerRequest.body.htmlContent, /@page\s*\{\s*size:\s*A5 portrait;/);
+  assert.match(providerRequest.body.htmlContent, /Novo pedido de presente/);
+  assert.match(providerRequest.body.htmlContent, /Resumo do presente/);
+  assert.match(providerRequest.body.htmlContent, /role="presentation"/);
   assert.match(providerRequest.body.htmlContent, /&lt;script&gt;cores vivas&lt;\/script&gt;/);
+  assert.doesNotMatch(providerRequest.body.htmlContent, /<script>cores vivas<\/script>/);
   assert.match(providerRequest.body.htmlContent, /Muitas felicidades!/);
+  assert.match(providerRequest.body.htmlContent, /Puzzle/);
   assert.match(providerRequest.body.subject, /Ana Example/);
   assert.ok(apiLogs.some((entry) => entry.includes('[api] Brevo send_enquiry_email: started')));
   assert.ok(apiLogs.some((entry) => entry.includes('[api] Brevo send_enquiry_email: succeeded')));
@@ -384,6 +392,145 @@ test('assistant chat keeps Ollama credentials server-side and uses its knowledge
   assert.match(messages[0].content, /Never request, extract, or place a name, email address, phone number, or consent/);
   assert.match(messages[0].content, /Markdown link using only an appropriate relative path/);
   assert.equal(messages[1].content, 'What gifts can I explore?');
+});
+
+test('assistant chat preserves a valid answer when optional form metadata is invalid', async () => {
+  const originalFetch = globalThis.fetch;
+  process.env.OLLAMA_API_KEY = 'test-ollama-key';
+  globalThis.fetch = async (input, init) => {
+    if (String(input) === 'https://ollama.com/api/chat') {
+      return new Response(JSON.stringify({
+        message: {
+          role: 'assistant',
+          content: JSON.stringify({
+            answer: 'You can explore our thoughtful birthday gifts.',
+            form_action: 'offer',
+            form_draft: {
+              occasion: 'Birthday',
+              recipient: 'Friend',
+              budget: '',
+              preferences: '',
+              product_ids: ['not-in-live-catalogue'],
+            },
+          }),
+        },
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const response = await fetch(`${baseUrl}/api/assistant/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        language: 'en',
+        messages: [{ role: 'user', content: 'What gifts do you recommend?' }],
+      }),
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      answer: 'You can explore our thoughtful birthday gifts.',
+      formAction: 'none',
+      formDraft: null,
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+    delete process.env.OLLAMA_API_KEY;
+  }
+});
+
+test('assistant chat accepts a plain-text Ollama answer without form metadata', async () => {
+  const originalFetch = globalThis.fetch;
+  process.env.OLLAMA_API_KEY = 'test-ollama-key';
+  globalThis.fetch = async (input, init) => {
+    if (String(input) === 'https://ollama.com/api/chat') {
+      return new Response(JSON.stringify({
+        message: {
+          role: 'assistant',
+          content: 'For a birthday, consider a personalized gift box with a card.',
+        },
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const response = await fetch(`${baseUrl}/api/assistant/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        language: 'en',
+        messages: [{ role: 'user', content: 'What could I give for a birthday?' }],
+      }),
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      answer: 'For a birthday, consider a personalized gift box with a card.',
+      formAction: 'none',
+      formDraft: null,
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+    delete process.env.OLLAMA_API_KEY;
+  }
+});
+
+test('assistant chat extracts the answer from a fenced JSON reply with surrounding text', async () => {
+  const originalFetch = globalThis.fetch;
+  process.env.OLLAMA_API_KEY = 'test-ollama-key';
+  const providerContent = `Here is the response:
+\`\`\`json
+${JSON.stringify({
+    answer: 'That sounds like a lovely way to celebrate an anniversary with your granda!',
+    form_action: 'offer',
+    form_draft: {
+      occasion: 'anniversary',
+      recipient: 'granda',
+      budget: '',
+      preferences: 'Decorative Vase',
+      product_ids: ['TAX-HOME-001'],
+    },
+  }, null, 2)}
+\`\`\`
+I hope this helps!`;
+  globalThis.fetch = async (input, init) => {
+    if (String(input) === 'https://ollama.com/api/chat') {
+      return new Response(JSON.stringify({
+        message: { role: 'assistant', content: providerContent },
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const response = await fetch(`${baseUrl}/api/assistant/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        language: 'en',
+        messages: [{ role: 'user', content: 'I need an anniversary present for my granda.' }],
+      }),
+    });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.answer, 'That sounds like a lovely way to celebrate an anniversary with your granda!');
+    assert.equal(result.formAction, 'none');
+    assert.equal(result.formDraft, null);
+    assert.doesNotMatch(result.answer, /```|form_action|form_draft|TAX-HOME-001/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    delete process.env.OLLAMA_API_KEY;
+  }
 });
 
 test('initial catalogue migration restricts public reads to safe views', () => {
