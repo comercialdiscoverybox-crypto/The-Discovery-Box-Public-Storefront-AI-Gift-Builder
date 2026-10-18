@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import AssistantWidget from './AssistantWidget';
 import type { AssistantGiftDraft } from './assistantTypes';
+import { getCanonicalSearchParams, getPageMetadata } from '../../pageMetadata';
 
 type Language = 'en' | 'pt';
 type Theme = 'light' | 'dark';
@@ -42,18 +43,25 @@ const copy = {
   en: {
     navHome: 'Home',
     navShop: 'Shop',
-    navCollections: 'Collections',
     navBuilder: 'Gift builder',
-    navIdeas: 'AI ideas',
     navCorporate: 'Corporate gifts',
     navAbout: 'About',
     navContact: 'Contact',
+    navHelp: 'FAQ',
     searchGifts: 'Explore gifts',
-    giftBuilder: 'Open the gift builder',
     themeLight: 'Switch to light mode',
     themeDark: 'Switch to dark mode',
     menu: 'Open navigation menu',
     browseCategories: 'Browse categories',
+    shopSearchLabel: 'Search gifts',
+    shopSearchPlaceholder: 'Search by name or keyword',
+    shopSearchSubmit: 'Search',
+    shopSortLabel: 'Sort by price',
+    shopSortFeatured: 'Featured order',
+    shopSortPriceLow: 'Price: low to high',
+    shopSortPriceHigh: 'Price: high to low',
+    shopNoResults: (query: string) => `No gifts match “${query}”. Try another search or clear it.`,
+    clearShopSearch: 'Clear search',
     pagePrevious: 'Previous',
     pageNext: 'Next',
     paginationLabel: 'Product pages',
@@ -62,9 +70,11 @@ const copy = {
     chosenWithCare: 'Chosen with care',
     madeForYou: <>made<br />for you</>,
     heroEyebrow: 'Personalized gifts for every moment',
+    heroArtworkMessage: ['Small', 'surprises.', 'Big smiles.'],
     heroTitle: <>More than gifts,<br />it’s a <span className="hero-title-highlight"><span>d</span><span>i</span><span>s</span><span>c</span><span>o</span><span>v</span><span>e</span><span>r</span><span>y</span></span><span className="hero-title-period">.</span></>,
     heroBody: 'Explore unique products, create personalized gift ideas and make every moment extra special.',
     heroCta: 'Start building',
+    heroBrowse: 'Browse gifts',
     browse: 'Explore the collection',
     create: 'Create a gift',
     trusted: 'Thoughtful by nature. Personal by design.',
@@ -109,6 +119,8 @@ const copy = {
     pageDescription: 'Thoughtful gifts, made personal. Explore The Discovery Box and create a gift that feels just right.',
     popularTitle: 'Made for moments that matter',
     productsBody: 'Browse our active catalogue. Availability and final details are confirmed with our team.',
+    enquiryProcessTitle: 'What happens after you enquire',
+    enquiryProcess: 'Sending an enquiry is not placing an order. Our team confirms feasibility, the final price, estimated preparation time, and delivery or collection details. If you accept the quote, the stated process is full payment in advance, arranged directly with the team. The order is confirmed only after payment is received and verified; timing estimates are not guarantees.',
     shop: 'The collection',
     all: 'All gifts',
     play: 'PLAY',
@@ -127,6 +139,12 @@ const copy = {
     backShop: 'Back to the collection',
     builderEyebrow: 'Your idea, made personal',
     builderTitle: 'Let’s make a gift that feels just right.',
+    builderOrientation: 'Choose an occasion and recipient, review product suggestions, then check your gift idea and contact details before sending an enquiry. Your answers stay editable until you submit.',
+    reviewInstructions: 'Check your gift details and selected products below, then enter your contact details and send the enquiry.',
+    giftDetails: 'Gift details',
+    editGiftDetails: 'Edit gift details',
+    editProductChoices: 'Edit product choices',
+    noProductsSelected: 'No products selected.',
     step: 'Step',
     of: 'of',
     next: 'Continue',
@@ -182,6 +200,39 @@ const copy = {
     aboutBody: 'The Discovery Box brings together thoughtful finds and personal touches to make the people in your life feel truly seen.',
     contactTitle: 'We’d love to hear what you’re celebrating.',
     contactBody: 'Tell us a little about the moment and our team will get back to you.',
+    faqTitle: 'Helpful answers, before you ask.',
+    faqBody: 'Find practical guidance about orders, timing, returns, samples and rewards. Details for each order are confirmed by our team.',
+    faqQuestions: [
+      {
+        question: 'What should I do if my order arrives damaged, incorrect or incomplete?',
+        answer: 'Contact our team privately with the relevant details. Keep the item and its original packaging while the team reviews the issue. The team will assess what happened and discuss an appropriate solution; the outcome depends on the case.',
+      },
+      {
+        question: 'Can I cancel an order or change a personalized design?',
+        answer: 'Contact the team as soon as possible. Whether a cancellation or change is possible depends on the order stage; materials, special purchases or work may already have incurred costs. Changes after design approval may not be possible and can affect the price or estimated timing.',
+      },
+      {
+        question: 'Can I return an item or get a refund?',
+        answer: 'Returns, exchanges and refunds are assessed case by case. Contact the team before returning anything. Change-of-mind returns may not be accepted for personalized, made-to-order or specially sourced items. If there is a confirmed problem, the team may consider a repair, replacement, refund or another agreed solution.',
+      },
+      {
+        question: 'Do you offer bulk pricing and different personalization for each item?',
+        answer: 'Bulk pricing is available for selected products. Quantity limits, individual names, multiple designs and character limits depend on the product and project. Send an enquiry with the product, quantity and personalization you have in mind so the team can confirm feasibility and pricing.',
+      },
+      {
+        question: 'How much time should I allow?',
+        answer: 'As general planning guidance, a one-unit order may take around 3–7 days; smaller requests should be sent at least 48 hours ahead, and large or bulk orders at least one month ahead. These are recommendations, not guaranteed completion or delivery dates. Include your required date in an enquiry so the team can confirm an estimate.',
+      },
+      {
+        question: 'Can I request a sample?',
+        answer: 'Miniature samples may be available for selected larger products. A full-size sample may have an additional materials and production cost. The team confirms availability, price and timing for each product.',
+      },
+      {
+        question: 'How do the loyalty stamps and rewards work?',
+        answer: 'The programme information describes one stamp for each eligible completed purchase, a free-delivery reward on the fifth eligible purchase for deliveries within Greater Maputo and Matola, and a Discovery Box gift on the eleventh purchase. Stamps follow a 12-month cycle. Eligibility, redemption and programme terms must be confirmed by the team.',
+      },
+    ],
+    faqContact: 'Still have a question? Contact our team.',
     instagramTitle: 'Follow the little discoveries.',
     instagramBody: 'Scan the code to find us on Instagram, share your Discovery Moment and tag @the_discoverybox.',
     instagramScan: 'Scan to follow',
@@ -189,9 +240,89 @@ const copy = {
     contactOptions: 'Contact options are being confirmed. You can still send an enquiry using the gift builder.',
     contactEmail: 'Email us',
     privacyTitle: 'Privacy notice',
-    privacyBody: 'We use the contact details and gift brief you submit only to respond to your enquiry. Chat messages are sent to Ollama to generate replies. When you continue from the gift brief to product selection, your occasion, recipient, budget and preferences are also sent to Ollama to match against the catalogue. Do not include sensitive personal information in free-text fields. Your contact details are sent to our enquiry email provider and are not sent to the recommendation or image-generation providers. If you request an illustrative image, your occasion, recipient, budget, preferences and selected public product names are sent to Google Gemini to create it. This site stores your language choice in your browser.',
+    privacyBody: 'This notice explains what information is used when you browse the website, use the assistant, request gift recommendations, or send an enquiry.',
+    privacySections: [
+      {
+        title: 'Information you provide',
+        paragraphs: [
+          'If you send a gift enquiry, the form asks for your name, email address, an optional phone number, and details for the gift brief. The brief may include the occasion, recipient, budget, preferences, a gift-card message, and products you select.',
+          'If you use the assistant, the messages you send are processed to generate replies. Please do not include sensitive personal information, passwords, payment details, identity numbers, health information, or private photographs in chat or other free-text fields.',
+        ],
+      },
+      {
+        title: 'How information is used and shared',
+        paragraphs: [
+          'Enquiry details are used to respond to your request and are sent to the configured email service so the team can receive it. The name, email, and phone fields are not included with gift-recommendation or image-generation requests. However, anything you type into chat or free-text brief fields is sent as part of that text to the AI provider used for that feature, so do not enter personal or sensitive details there.',
+          'When you ask for gift recommendations, the occasion, recipient, budget, and preferences are sent to Ollama to match your brief against the public catalogue. Chat messages are also sent to Ollama to generate assistant replies.',
+          'If you request an illustrative concept image, the occasion, recipient, budget, preferences, and names of selected public products are sent to Google Gemini to generate it. The image is an illustration, not a representation of a confirmed product.',
+        ],
+      },
+      {
+        title: 'Information stored in your browser',
+        paragraphs: [
+          'The website stores your language and light/dark theme preferences in your browser’s local storage. These preferences help the site remember your choices and are not part of your gift enquiry.',
+        ],
+      },
+      {
+        title: 'Questions about your information',
+        paragraphs: [
+          'For a question about information you submitted or an enquiry, contact the team privately at Info.discoverybox@gmail.com. Do not post personal or payment information publicly.',
+        ],
+      },
+    ],
     termsTitle: 'Important information',
     termsBody: 'Product availability, contents, personalization, prices and delivery details are confirmed by The Discovery Box. Gift-builder selections and generated images are suggestions only and do not create an order or a binding offer. No online payment or order reservation is available on this website.',
+    termsSections: [
+      {
+        title: 'Browsing, listings, and enquiries',
+        paragraphs: [
+          'The website lets you browse the public catalogue and send an enquiry. A product listing, gift-builder selection, recommendation, or generated concept image is informational or illustrative only. It does not guarantee stock, production capacity, suitability, or availability.',
+          'Prices shown are in Mozambican meticais (MZN) and may not be the final price for a customized or multi-item request. The team confirms the final specifications, price, any delivery charge, and estimated preparation time. Sending an enquiry does not place an order, reserve an item, or mean the team has accepted the request.',
+        ],
+      },
+      {
+        title: 'Quotes, payment, and order confirmation',
+        paragraphs: [
+          'After reviewing a request, the team will confirm whether it can produce the requested item and agree the model, size, quantity, personalization, price, and timing with you. The owner’s stated process is full payment in advance after the quotation is agreed. M-Pesa and e-Mola are listed as payment methods; the team will provide current payment instructions directly.',
+          'This website does not take payment. Do not rely on payment details supplied in chat or an unverified message. An order is treated as confirmed only after the team has received and verified the agreed payment.',
+        ],
+      },
+      {
+        title: 'Personalized designs and changes',
+        paragraphs: [
+          'The team must confirm whether a requested design, material, size, color, quantity, logo, or other personalization is feasible. For a personalized item, review names, spelling, colors, sizes, quantities, and other specifications carefully before approving the final design.',
+          'Production may begin after design approval. Changes requested later may not be possible and may involve additional costs or a revised estimate. The team will confirm available options before proceeding.',
+        ],
+      },
+      {
+        title: 'Preparation, deadlines, and delivery',
+        paragraphs: [
+          'Preparation and delivery estimates depend on the product, quantity, customization, materials, and production schedule. The owner’s general planning guidance is approximately 3–7 days for a one-unit order, at least one month ahead for large or bulk orders, and at least 48 hours’ notice for smaller requests. These are recommendations, not guaranteed completion or delivery dates. Urgent production may be possible, may incur an additional fee, and must be confirmed by the team.',
+          'The team and customer agree collection or delivery details for each order, including location, timing, delivery method, cost, and recipient contact. Delivery areas, fees, and timing are not universal. If an order is delayed, the team should provide an updated estimate when reasonably possible; contact the team to discuss a fair solution if the delay becomes unreasonable.',
+        ],
+      },
+      {
+        title: 'Cancellations, returns, and refunds',
+        paragraphs: [
+          'Contact the team as soon as possible to request a cancellation. Whether it can be accepted depends on the order stage. Costs may have been incurred for personalized work, special purchases, materials, or work already completed.',
+          'Returns and exchanges are assessed case by case. Contact the team before returning an item. A change-of-mind return may not be accepted for personalized, made-to-order, or specially sourced products; a standard item not yet dispatched may be reviewed. If an item arrives damaged, defective, incorrect, incomplete, or materially different from an approved design, contact the team privately with relevant details. Keep damaged items and their original packaging until the team has reviewed the issue.',
+          'A refund may be considered when an order cannot be fulfilled as agreed, a confirmed problem cannot reasonably be resolved, or other circumstances justify one. A repair, replacement, or another agreed solution may be offered first. If approved, the team will confirm the refund amount, method, and expected timing. These case-by-case policies do not limit rights provided by applicable law.',
+        ],
+      },
+      {
+        title: 'Bulk orders and samples',
+        paragraphs: [
+          'Bulk pricing is available for selected products. Quantity limits, individual-name personalization, different designs, and character limits vary by product and project and must be confirmed by the team. Miniature samples may be available for selected larger products; a full-size sample may have an additional charge. The team confirms availability, cost, and timing.',
+        ],
+      },
+      {
+        title: 'Loyalty programme',
+        paragraphs: [
+          'The owner’s programme information describes one stamp for each eligible completed purchase, a free-delivery reward on the fifth purchase for eligible deliveries within Greater Maputo and Matola, and a Discovery Box gift on the eleventh purchase. Stamp progress follows a 12-month cycle. Eligibility, redemption, delivery-area qualification, and combining a reward with a promotion are subject to programme terms and team verification.',
+          'The post-purchase link provides access to order tracking and the digital loyalty card. The assistant cannot access your order, payment, or loyalty records. Contact the team privately for help with a missing link, stamp, or reward.',
+        ],
+      },
+    ],
     occasions: ['Birthday', 'Anniversary', 'Thank you', 'New baby', 'Celebration', 'Corporate event', 'Something else'],
     recipients: ['Friend', 'Partner', 'Child', 'Family member', 'Colleague', 'Client', 'Someone else'],
     corporateRecipients: ['Employees or team', 'Clients', 'Business partners', 'Event attendees', 'VIP guests', 'Suppliers', 'Something else'],
@@ -200,18 +331,25 @@ const copy = {
   pt: {
     navHome: 'Início',
     navShop: 'Loja',
-    navCollections: 'Coleções',
     navBuilder: 'Criador de presentes',
-    navIdeas: 'Ideias com IA',
     navCorporate: 'Presentes empresariais',
     navAbout: 'Sobre nós',
     navContact: 'Contacto',
+    navHelp: 'Perguntas frequentes',
     searchGifts: 'Explorar presentes',
-    giftBuilder: 'Abrir criador de presentes',
     themeLight: 'Mudar para o modo claro',
     themeDark: 'Mudar para o modo escuro',
     menu: 'Abrir menu de navegação',
     browseCategories: 'Explorar categorias',
+    shopSearchLabel: 'Pesquisar presentes',
+    shopSearchPlaceholder: 'Pesquisar por nome ou palavra-chave',
+    shopSearchSubmit: 'Pesquisar',
+    shopSortLabel: 'Ordenar por preço',
+    shopSortFeatured: 'Ordem em destaque',
+    shopSortPriceLow: 'Preço: mais baixo primeiro',
+    shopSortPriceHigh: 'Preço: mais alto primeiro',
+    shopNoResults: (query: string) => `Não encontrámos presentes para “${query}”. Experimente outra pesquisa ou limpe-a.`,
+    clearShopSearch: 'Limpar pesquisa',
     pagePrevious: 'Anterior',
     pageNext: 'Seguinte',
     paginationLabel: 'Páginas de produtos',
@@ -220,9 +358,11 @@ const copy = {
     chosenWithCare: 'Escolhido com carinho',
     madeForYou: <>feito<br />para si</>,
     heroEyebrow: 'Presentes personalizados para cada momento',
+    heroArtworkMessage: ['Pequenas', 'surpresas.', 'Grandes sorrisos.'],
     heroTitle: <>Mais do que presentes,<br />uma&nbsp;<span className="hero-title-highlight"><span>d</span><span>e</span><span>s</span><span>c</span><span>o</span><span>b</span><span>e</span><span>r</span><span>t</span><span>a</span></span><span className="hero-title-period">.</span></>,
     heroBody: 'Descubra produtos únicos, crie ideias de presentes personalizados e torne cada momento ainda mais especial.',
     heroCta: 'Começar a criar',
+    heroBrowse: 'Explorar presentes',
     browse: 'Explorar a coleção',
     create: 'Criar um presente',
     trusted: 'Pensado com carinho. Feito à sua medida.',
@@ -267,6 +407,8 @@ const copy = {
     pageDescription: 'Presentes especiais e criações personalizadas. Descubra a The Discovery Box e crie um presente único.',
     popularTitle: 'Feito para momentos especiais',
     productsBody: 'Explore o nosso catálogo ativo. A disponibilidade e os detalhes finais são confirmados pela nossa equipa.',
+    enquiryProcessTitle: 'O que acontece depois do seu pedido',
+    enquiryProcess: 'Enviar um pedido de informação não significa fazer uma encomenda. A nossa equipa confirma a viabilidade, o preço final, o prazo estimado de preparação e os detalhes de entrega ou recolha. Se aceitar o orçamento, o processo indicado prevê o pagamento integral antecipado, combinado diretamente com a equipa. A encomenda só é confirmada depois de o pagamento ser recebido e verificado; os prazos são estimativas, não garantias.',
     shop: 'A coleção',
     all: 'Todos os presentes',
     play: 'BRINCAR',
@@ -285,6 +427,12 @@ const copy = {
     backShop: 'Voltar à coleção',
     builderEyebrow: 'A sua ideia, feita à medida',
     builderTitle: 'Vamos criar um presente especial.',
+    builderOrientation: 'Escolha a ocasião e o destinatário, reveja as sugestões de produtos e, no final, confirme a ideia e os contactos antes de enviar o pedido. Pode editar as respostas até ao envio.',
+    reviewInstructions: 'Confirme os detalhes do presente e os produtos selecionados abaixo. Depois, indique os seus contactos e envie o pedido.',
+    giftDetails: 'Detalhes do presente',
+    editGiftDetails: 'Editar detalhes do presente',
+    editProductChoices: 'Editar produtos escolhidos',
+    noProductsSelected: 'Nenhum produto selecionado.',
     step: 'Passo',
     of: 'de',
     next: 'Continuar',
@@ -340,6 +488,39 @@ const copy = {
     aboutBody: 'A Discovery Box reúne descobertas especiais e toques pessoais para que as pessoas importantes se sintam verdadeiramente valorizadas.',
     contactTitle: 'Conte-nos o que vamos celebrar.',
     contactBody: 'Diga-nos um pouco sobre a ocasião e a nossa equipa entrará em contacto.',
+    faqTitle: 'Respostas úteis às suas dúvidas.',
+    faqBody: 'Encontre orientações práticas sobre pedidos, prazos, devoluções, amostras e recompensas. A nossa equipa confirma os detalhes de cada pedido.',
+    faqQuestions: [
+      {
+        question: 'O que devo fazer se o pedido chegar danificado, incorreto ou incompleto?',
+        answer: 'Contacte a equipa em privado com os detalhes relevantes. Guarde o artigo e a embalagem original enquanto a equipa analisa a situação. A equipa avaliará o ocorrido e discutirá uma solução adequada; o resultado depende de cada caso.',
+      },
+      {
+        question: 'Posso cancelar um pedido ou alterar um design personalizado?',
+        answer: 'Contacte a equipa assim que possível. A possibilidade de cancelamento ou alteração depende da fase do pedido; os materiais, compras especiais ou trabalho já realizado podem ter custos associados. Alterações após a aprovação do design poderão não ser possíveis e podem afetar o preço ou o prazo estimado.',
+      },
+      {
+        question: 'Posso devolver um artigo ou receber um reembolso?',
+        answer: 'Devoluções, trocas e reembolsos são avaliados caso a caso. Contacte a equipa antes de devolver qualquer artigo. Devoluções por mudança de ideia poderão não ser aceites para artigos personalizados, feitos por encomenda ou adquiridos especialmente. Se houver um problema confirmado, a equipa poderá considerar uma reparação, substituição, reembolso ou outra solução acordada.',
+      },
+      {
+        question: 'Há preços para pedidos em quantidade e personalização diferente em cada artigo?',
+        answer: 'Há preços especiais para quantidades em alguns produtos. Os limites de quantidade, nomes individuais, designs diferentes e limites de caracteres dependem do produto e do projeto. Envie um pedido com o produto, quantidade e personalização pretendida para a equipa confirmar a viabilidade e o preço.',
+      },
+      {
+        question: 'Com quanta antecedência devo fazer o pedido?',
+        answer: 'Como orientação geral, um pedido de uma unidade poderá demorar cerca de 3–7 dias; pedidos pequenos devem ser enviados com pelo menos 48 horas de antecedência e pedidos grandes ou em quantidade com pelo menos um mês. São recomendações, não prazos garantidos de conclusão ou entrega. Indique a data pretendida no pedido para a equipa confirmar uma estimativa.',
+      },
+      {
+        question: 'Posso pedir uma amostra?',
+        answer: 'Poderão estar disponíveis amostras em miniatura de alguns produtos maiores. Uma amostra em tamanho real poderá ter um custo adicional de materiais e produção. A equipa confirma a disponibilidade, o preço e o prazo de cada produto.',
+      },
+      {
+        question: 'Como funcionam os carimbos e as recompensas de fidelidade?',
+        answer: 'As informações do programa descrevem um carimbo por cada compra elegível concluída, uma recompensa de entrega gratuita na quinta compra elegível para entregas na Grande Maputo e Matola, e um presente The Discovery Box na décima primeira compra. Os carimbos seguem um ciclo de 12 meses. A elegibilidade, utilização das recompensas e os termos do programa devem ser confirmados pela equipa.',
+      },
+    ],
+    faqContact: 'Ainda tem dúvidas? Contacte a nossa equipa.',
     instagramTitle: 'Acompanhe pequenas descobertas.',
     instagramBody: 'Leia o código para nos encontrar no Instagram, partilhe o seu momento Discovery e identifique @the_discoverybox.',
     instagramScan: 'Leia para seguir',
@@ -347,9 +528,89 @@ const copy = {
     contactOptions: 'Os contactos estão a ser confirmados. Ainda pode enviar um pedido através do criador de presentes.',
     contactEmail: 'Envie-nos um email',
     privacyTitle: 'Aviso de privacidade',
-    privacyBody: 'Utilizamos os contactos e a descrição enviados apenas para responder ao seu pedido. As mensagens de conversa são enviadas à Ollama para gerar respostas. Quando avança da descrição do presente para a seleção de produtos, a ocasião, o destinatário, o orçamento e as preferências também são enviados à Ollama para encontrar correspondências no catálogo. Não inclua informações pessoais sensíveis nos campos de texto livre. Os seus contactos são enviados ao nosso serviço de email e não são enviados aos serviços de recomendações ou de criação de imagens. Se pedir uma imagem ilustrativa, a ocasião, o destinatário, o orçamento, as preferências e os nomes dos produtos públicos selecionados são enviados à Google Gemini para a criar. Este site guarda a sua preferência de idioma no navegador.',
+    privacyBody: 'Este aviso explica que informações são utilizadas quando navega no website, utiliza o assistente, pede recomendações de presentes ou envia um pedido.',
+    privacySections: [
+      {
+        title: 'Informações fornecidas por si',
+        paragraphs: [
+          'Se enviar um pedido de presente, o formulário solicita o seu nome, endereço de email, número de telefone opcional e detalhes sobre a ideia de presente. Estes podem incluir a ocasião, o destinatário, o orçamento, as preferências, uma mensagem para o cartão e os produtos selecionados.',
+          'Se utilizar o assistente, as mensagens que enviar são processadas para gerar respostas. Não inclua no chat nem noutros campos de texto livre informações pessoais sensíveis, palavras-passe, dados de pagamento, números de identificação, informações de saúde ou fotografias privadas.',
+        ],
+      },
+      {
+        title: 'Como as informações são utilizadas e partilhadas',
+        paragraphs: [
+          'Os dados do pedido são utilizados para responder e enviados ao serviço de email configurado para que a equipa os receba. Os campos de nome, email e telefone não são incluídos nos pedidos de recomendações ou de criação de imagens. No entanto, tudo o que escrever no chat ou nos campos de texto livre é enviado, como parte desse texto, ao fornecedor de IA utilizado nessa funcionalidade. Por isso, não introduza aí dados pessoais ou sensíveis.',
+          'Quando pede recomendações, a ocasião, o destinatário, o orçamento e as preferências são enviados à Ollama para comparar a sua ideia com o catálogo público. As mensagens do chat também são enviadas à Ollama para gerar respostas do assistente.',
+          'Se pedir uma imagem conceptual ilustrativa, a ocasião, o destinatário, o orçamento, as preferências e os nomes dos produtos públicos selecionados são enviados à Google Gemini para a criar. A imagem é uma ilustração e não representa um produto confirmado.',
+        ],
+      },
+      {
+        title: 'Informações guardadas no navegador',
+        paragraphs: [
+          'O website guarda no armazenamento local do navegador as suas preferências de idioma e de tema claro/escuro. Estas preferências ajudam o website a recordar as suas escolhas e não fazem parte do pedido de presente.',
+        ],
+      },
+      {
+        title: 'Dúvidas sobre as suas informações',
+        paragraphs: [
+          'Para esclarecer dúvidas sobre informações enviadas ou sobre um pedido, contacte a equipa em privado através de Info.discoverybox@gmail.com. Não publique informações pessoais ou de pagamento.',
+        ],
+      },
+    ],
     termsTitle: 'Informações importantes',
     termsBody: 'A disponibilidade, os conteúdos, a personalização, os preços e a entrega são confirmados pela The Discovery Box. As seleções e imagens geradas são apenas sugestões e não constituem uma encomenda ou oferta vinculativa. Este website não permite pagamentos nem reserva de encomendas.',
+    termsSections: [
+      {
+        title: 'Navegação, catálogo e pedidos',
+        paragraphs: [
+          'O website permite explorar o catálogo público e enviar um pedido. Uma ficha de produto, seleção no criador de presentes, recomendação ou imagem conceptual gerada é apenas informativa ou ilustrativa. Não garante stock, capacidade de produção, adequação ou disponibilidade.',
+          'Os preços apresentados estão em meticais moçambicanos (MZN) e podem não corresponder ao preço final de um pedido personalizado ou de várias unidades. A equipa confirma as especificações finais, o preço, eventuais custos de entrega e o prazo estimado de preparação. O envio de um pedido não constitui uma encomenda, não reserva um artigo nem significa que a equipa o aceitou.',
+        ],
+      },
+      {
+        title: 'Orçamentos, pagamento e confirmação',
+        paragraphs: [
+          'Após analisar um pedido, a equipa confirma se pode produzir o artigo e acorda consigo o modelo, tamanho, quantidade, personalização, preço e prazo. O processo indicado pelo proprietário prevê o pagamento integral antecipado depois da aprovação do orçamento. M-Pesa e e-Mola são os métodos de pagamento indicados; a equipa fornecerá diretamente as instruções atualizadas.',
+          'Este website não recebe pagamentos. Não utilize dados de pagamento fornecidos no chat ou numa mensagem não verificada. A encomenda só é considerada confirmada depois de a equipa receber e verificar o pagamento acordado.',
+        ],
+      },
+      {
+        title: 'Designs personalizados e alterações',
+        paragraphs: [
+          'A equipa deve confirmar se o design, material, tamanho, cor, quantidade, logótipo ou outra personalização pretendida é viável. Antes de aprovar o design final, verifique cuidadosamente nomes, ortografia, cores, tamanhos, quantidades e outras especificações.',
+          'A produção pode começar após a aprovação do design. As alterações pedidas posteriormente podem não ser possíveis e podem implicar custos adicionais ou um novo prazo estimado. A equipa confirmará as opções disponíveis antes de avançar.',
+        ],
+      },
+      {
+        title: 'Preparação, prazos e entrega',
+        paragraphs: [
+          'Os prazos estimados de preparação e entrega dependem do produto, quantidade, personalização, materiais e calendário de produção. As recomendações gerais do proprietário são aproximadamente 3–7 dias para uma unidade, pelo menos um mês de antecedência para pedidos grandes ou em quantidade e pelo menos 48 horas para pedidos pequenos. São recomendações, não prazos garantidos de conclusão ou entrega. A produção urgente poderá ser possível, poderá ter um custo adicional e terá de ser confirmada pela equipa.',
+          'A equipa e o cliente acordam os detalhes de recolha ou entrega para cada pedido, incluindo local, data, método, custo e contacto do destinatário. As zonas, taxas e prazos de entrega não são universais. Em caso de atraso, a equipa deverá comunicar uma estimativa atualizada assim que for razoavelmente possível; contacte a equipa para discutir uma solução justa se o atraso se tornar excessivo.',
+        ],
+      },
+      {
+        title: 'Cancelamentos, devoluções e reembolsos',
+        paragraphs: [
+          'Contacte a equipa assim que possível para pedir o cancelamento. A aceitação depende da fase do pedido. Podem já ter sido incorridos custos com personalização, compras especiais, materiais ou trabalho realizado.',
+          'As devoluções e trocas são avaliadas caso a caso. Contacte a equipa antes de devolver qualquer artigo. Uma devolução por mudança de ideia poderá não ser aceite para produtos personalizados, feitos por encomenda ou adquiridos especialmente; um artigo normal ainda não expedido poderá ser analisado. Se receber um artigo danificado, defeituoso, incorreto, incompleto ou materialmente diferente do design aprovado, contacte a equipa em privado com os detalhes relevantes. Guarde o artigo danificado e a embalagem original até a equipa analisar a situação.',
+          'Poderá ser considerado um reembolso quando uma encomenda não puder ser cumprida conforme acordado, quando um problema confirmado não puder ser razoavelmente resolvido ou quando outras circunstâncias o justifiquem. Poderá ser proposta primeiro uma reparação, substituição ou outra solução acordada. Se aprovado, a equipa confirmará o valor, método e prazo previsto do reembolso. Estas políticas, avaliadas caso a caso, não limitam os direitos previstos na legislação aplicável.',
+        ],
+      },
+      {
+        title: 'Pedidos em quantidade e amostras',
+        paragraphs: [
+          'Há preços especiais para quantidades em alguns produtos. Os limites de quantidade, a personalização de nomes individuais, os designs diferentes e os limites de caracteres variam conforme o produto e o projeto e devem ser confirmados pela equipa. Poderão estar disponíveis amostras em miniatura de alguns produtos maiores; uma amostra em tamanho real poderá ter um custo adicional. A equipa confirma disponibilidade, custo e prazo.',
+        ],
+      },
+      {
+        title: 'Programa de fidelidade',
+        paragraphs: [
+          'As informações do programa fornecidas pelo proprietário descrevem um carimbo por cada compra elegível concluída, uma recompensa de entrega gratuita na quinta compra para entregas elegíveis na Grande Maputo e Matola, e um presente The Discovery Box na décima primeira compra. A contagem de carimbos segue um ciclo de 12 meses. A elegibilidade, utilização das recompensas, área de entrega e acumulação com promoções dependem dos termos do programa e da confirmação da equipa.',
+          'A ligação enviada após a compra dá acesso ao acompanhamento da encomenda e ao cartão digital de fidelidade. O assistente não consegue consultar os seus pedidos, pagamentos ou registos de fidelidade. Contacte a equipa em privado se precisar de ajuda com uma ligação, carimbo ou recompensa em falta.',
+        ],
+      },
+    ],
     occasions: ['Aniversário', 'Aniversário de relacionamento', 'Agradecimento', 'Nascimento', 'Celebração', 'Evento empresarial', 'Outra ocasião'],
     recipients: ['Amigo/a', 'Companheiro/a', 'Criança', 'Familiar', 'Colega', 'Cliente', 'Outra pessoa'],
     corporateRecipients: ['Colaboradores ou equipa', 'Clientes', 'Parceiros de negócio', 'Participantes no evento', 'Convidados VIP', 'Fornecedores', 'Outra opção'],
@@ -360,6 +621,10 @@ const copy = {
 type TextKey = keyof typeof copy.en;
 
 const familyName = (family: CatalogItem['family']) => family;
+
+function normalizeSearchText(value: string): string {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase();
+}
 
 function readLanguagePreference(): Language {
   try {
@@ -435,9 +700,7 @@ function App() {
       console.warn('Could not save the language preference', error);
     }
     document.documentElement.lang = language;
-    document.title = t.pageTitle;
-    document.querySelector('meta[name="description"]')?.setAttribute('content', t.pageDescription);
-  }, [language, t.pageDescription, t.pageTitle]);
+  }, [language]);
 
   useEffect(() => {
     try {
@@ -503,6 +766,53 @@ function App() {
   const nameFor = (item: CatalogItem) => language === 'en' ? item.name_en : item.name_pt;
   const descriptionFor = (item: CatalogItem) => language === 'en' ? item.description_en : item.description_pt;
 
+  useEffect(() => {
+    const productMetadata = selectedItem
+      ? {
+        id: selectedItem.id,
+        name: nameFor(selectedItem),
+        description: descriptionFor(selectedItem),
+        image: productImage(selectedItem),
+      }
+      : undefined;
+    const metadata = getPageMetadata(path, language, currentLocation.searchParams, productMetadata);
+    const canonicalParams = getCanonicalSearchParams(currentLocation.searchParams).toString();
+    const canonicalUrl = `${window.location.origin}${path}${canonicalParams ? `?${canonicalParams}` : ''}`;
+    const imageUrl = new URL(metadata.image, window.location.origin).toString();
+    const setMeta = (attribute: 'name' | 'property', key: string, content: string) => {
+      let element = document.querySelector<HTMLMetaElement>(`meta[${attribute}="${key}"]`);
+      if (!element) {
+        element = document.createElement('meta');
+        element.setAttribute(attribute, key);
+        document.head.append(element);
+      }
+      element.content = content;
+    };
+    document.title = metadata.title;
+    setMeta('name', 'description', metadata.description);
+    setMeta('name', 'robots', metadata.robots);
+    setMeta('property', 'og:title', metadata.title);
+    setMeta('property', 'og:description', metadata.description);
+    setMeta('property', 'og:type', metadata.type);
+    setMeta('property', 'og:url', canonicalUrl);
+    setMeta('property', 'og:image', imageUrl);
+    setMeta('property', 'og:image:alt', metadata.title);
+    setMeta('property', 'og:site_name', 'The Discovery Box');
+    setMeta('property', 'og:locale', language === 'pt' ? 'pt_MZ' : 'en_US');
+    setMeta('name', 'twitter:card', 'summary_large_image');
+    setMeta('name', 'twitter:title', metadata.title);
+    setMeta('name', 'twitter:description', metadata.description);
+    setMeta('name', 'twitter:image', imageUrl);
+    setMeta('name', 'twitter:image:alt', metadata.title);
+    let canonicalLink = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (!canonicalLink) {
+      canonicalLink = document.createElement('link');
+      canonicalLink.rel = 'canonical';
+      document.head.append(canonicalLink);
+    }
+    canonicalLink.href = canonicalUrl;
+  }, [currentUrl, language, path, selectedItem]);
+
   const renderCards = (items: CatalogItem[]) => (
     <div className="product-grid">
       {items.map((item) => (
@@ -547,13 +857,12 @@ function App() {
             <p>{t.heroBody}</p>
             <div className="button-row">
               <a className="button button-primary" href="/gift-builder">{t.heroCta}<span aria-hidden="true">→</span></a>
+              <a className="button hero-browse-button" href="/shop">{t.heroBrowse}<span aria-hidden="true">↗</span></a>
             </div>
           </div>
           <img className="hero-artwork" src="/discovery-box-adventure.png" alt="" aria-hidden="true" />
           <p className="hero-artwork-message">
-            <span>Small</span>
-            <span>surprises.</span>
-            <span>Big smiles.</span>
+            {t.heroArtworkMessage.map((line) => <span key={line}>{line}</span>)}
             <span className="hero-artwork-heart" aria-hidden="true">♡</span>
           </p>
         </section>
@@ -625,6 +934,9 @@ function App() {
     const familyParam = currentLocation.searchParams.get('family');
     const collectionParam = currentLocation.searchParams.get('collection');
     const categoryParam = currentLocation.searchParams.get('category');
+    const searchQuery = currentLocation.searchParams.get('q')?.trim() || '';
+    const sortParam = currentLocation.searchParams.get('sort');
+    const sortOrder = sortParam === 'price-low' || sortParam === 'price-high' ? sortParam : 'featured';
     const selectedCollection = catalog.collections.find((item) => item.id === collectionParam);
     const family = familyParam === 'PLAY' || familyParam === 'HOME' || familyParam === 'BUSINESS'
       ? familyParam
@@ -635,16 +947,71 @@ function App() {
     const collectionItems = selectedCollection
       ? familyItems.filter((item) => collectionForItem(item)?.id === selectedCollection.id)
       : familyItems;
-    const visible = categoryParam
+    const categoryItems = categoryParam
       ? collectionItems.filter((item) => item.category === categoryParam)
       : collectionItems;
+    const normalizedQuery = normalizeSearchText(searchQuery);
+    const visible = normalizedQuery
+      ? categoryItems.filter((item) => {
+        const collection = collectionForItem(item);
+        const searchableText = normalizeSearchText([
+          item.id,
+          item.family,
+          item.name_en,
+          item.name_pt,
+          item.description_en,
+          item.description_pt,
+          item.category || '',
+          collection?.name_en || '',
+          collection?.name_pt || '',
+        ].join(' '));
+        return searchableText.includes(normalizedQuery);
+      })
+      : categoryItems;
+    const sortedVisible = [...visible].sort((left, right) => {
+      if (sortOrder === 'featured') return 0;
+      const leftPrice = left.price_mzn == null || String(left.price_mzn).trim() === '' ? null : Number(left.price_mzn);
+      const rightPrice = right.price_mzn == null || String(right.price_mzn).trim() === '' ? null : Number(right.price_mzn);
+      const validLeftPrice = leftPrice !== null && Number.isFinite(leftPrice) ? leftPrice : null;
+      const validRightPrice = rightPrice !== null && Number.isFinite(rightPrice) ? rightPrice : null;
+      if (validLeftPrice === null) return validRightPrice === null ? 0 : 1;
+      if (validRightPrice === null) return -1;
+      return sortOrder === 'price-low' ? validLeftPrice - validRightPrice : validRightPrice - validLeftPrice;
+    });
     const productsPerPage = 6;
-    const pageCount = Math.max(1, Math.ceil(visible.length / productsPerPage));
+    const pageCount = Math.max(1, Math.ceil(sortedVisible.length / productsPerPage));
     const requestedPage = Number(currentLocation.searchParams.get('page') || 1);
     const currentPage = Number.isSafeInteger(requestedPage) && requestedPage > 0
       ? Math.min(requestedPage, pageCount)
       : 1;
-    const pageItems = visible.slice((currentPage - 1) * productsPerPage, currentPage * productsPerPage);
+    const pageItems = sortedVisible.slice((currentPage - 1) * productsPerPage, currentPage * productsPerPage);
+    const shopFilterUrl = (updates: Record<string, string | null>) => {
+      const params = new URLSearchParams(currentLocation.searchParams);
+      params.delete('page');
+      Object.entries(updates).forEach(([key, value]) => {
+        if (value) params.set(key, value);
+        else params.delete(key);
+      });
+      const query = params.toString();
+      return `/shop${query ? `?${query}` : ''}`;
+    };
+    const submitShopSearch = (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const formData = new FormData(event.currentTarget);
+      const params = new URLSearchParams();
+      const query = String(formData.get('q') || '').trim();
+      const selectedSort = String(formData.get('sort') || 'featured');
+      const formFamily = String(formData.get('family') || '');
+      const formCollection = String(formData.get('collection') || '');
+      const formCategory = String(formData.get('category') || '');
+      if (query) params.set('q', query);
+      if (selectedSort !== 'featured') params.set('sort', selectedSort);
+      if (formFamily) params.set('family', formFamily);
+      if (formCollection) params.set('collection', formCollection);
+      if (formCategory) params.set('category', formCategory);
+      const queryString = params.toString();
+      navigateInternal(`/shop${queryString ? `?${queryString}` : ''}`);
+    };
     const shopPageUrl = (page: number) => {
       const params = new URLSearchParams(currentLocation.searchParams);
       if (page === 1) params.delete('page');
@@ -664,6 +1031,14 @@ function App() {
         : family === 'ALL'
           ? t.shop
           : familyName(family);
+    const activeTaxonomyLabel = selectedCollection
+      ? collectionNameFor(selectedCollection)
+      : categoryParam
+        ? categoryNameFor(categoryParam)
+        : family !== 'ALL'
+          ? familyName(family)
+          : t.all;
+    const hasActiveTaxonomyFilter = Boolean(selectedCollection || categoryParam || family !== 'ALL');
     page = (
       <section className="section page-section shop-layout">
         <div className="shop-main">
@@ -673,6 +1048,24 @@ function App() {
               <h1>{pageTitle}</h1>
               <p>{selectedCollection ? (language === 'en' ? selectedCollection.tagline_en : selectedCollection.tagline_pt) || t.productsBody : t.productsBody}</p>
             </div>
+            <form className="shop-controls" onSubmit={submitShopSearch} role="search">
+              <label className="shop-search-field">
+                <span>{t.shopSearchLabel}</span>
+                <input type="search" name="q" defaultValue={searchQuery} placeholder={t.shopSearchPlaceholder} />
+              </label>
+              <label className="shop-sort-field">
+                <span>{t.shopSortLabel}</span>
+                <select name="sort" defaultValue={sortOrder}>
+                  <option value="featured">{t.shopSortFeatured}</option>
+                  <option value="price-low">{t.shopSortPriceLow}</option>
+                  <option value="price-high">{t.shopSortPriceHigh}</option>
+                </select>
+              </label>
+              {familyParam && <input type="hidden" name="family" value={familyParam} />}
+              {selectedCollection && <input type="hidden" name="collection" value={selectedCollection.id} />}
+              {categoryParam && <input type="hidden" name="category" value={categoryParam} />}
+              <button className="button button-primary shop-search-submit" type="submit">{t.shopSearchSubmit}</button>
+            </form>
             {availableCategories.length > 0 && (
               <div className="taxonomy-filter-group shop-category-filter">
                 <div className="filter-row taxonomy-filter-row">
@@ -681,9 +1074,7 @@ function App() {
                     return (
                       <a
                         className={`filter-chip${categoryParam === category ? ' filter-active' : ''}`}
-                        href={categoryParam === category
-                          ? (family === 'ALL' ? '/shop' : `/shop?family=${family}${selectedCollection ? `&collection=${encodeURIComponent(selectedCollection.id)}` : ''}`)
-                          : `/shop?${family === 'ALL' ? '' : `family=${family}&`}${selectedCollection ? `collection=${encodeURIComponent(selectedCollection.id)}&` : ''}category=${encodeURIComponent(category)}`}
+                        href={shopFilterUrl({ category: categoryParam === category ? null : category })}
                         key={category}
                       >
                         {categoryName}
@@ -695,17 +1086,24 @@ function App() {
             )}
           </div>
           <aside className="shop-sidebar">
-            <details className="shop-sidebar-details">
-              <summary>{t.browseCategories}</summary>
+            <details
+              className="shop-sidebar-details"
+              key={`${family}:${collectionParam || ''}:${categoryParam || ''}`}
+              open={hasActiveTaxonomyFilter}
+            >
+              <summary>
+                <span>{t.browseCategories}</span>
+                <span className="shop-sidebar-current">{activeTaxonomyLabel}</span>
+              </summary>
               <nav className="shop-side-navigation" aria-label={t.browseCategories}>
-                <a className={`shop-side-link${family === 'ALL' && !selectedCollection && !categoryParam ? ' shop-side-active' : ''}`} href="/shop">
+                <a className={`shop-side-link${family === 'ALL' && !selectedCollection && !categoryParam ? ' shop-side-active' : ''}`} href={shopFilterUrl({ family: null, collection: null, category: null })}>
                   {t.all}
                 </a>
                 {(['PLAY', 'HOME', 'BUSINESS'] as const).map((world) => (
                   <div className="shop-side-world" key={world}>
                     <a
                       className={`shop-side-link${family === world ? ' shop-side-active' : ''}`}
-                      href={`/shop?family=${world}`}
+                      href={shopFilterUrl({ family: world, collection: null, category: null })}
                       aria-current={family === world ? 'page' : undefined}
                     >
                       {familyName(world)}
@@ -717,7 +1115,7 @@ function App() {
                         {availableCollections.map((collection) => (
                           <a
                             className={`shop-side-collection${selectedCollection?.id === collection.id ? ' shop-side-collection-active' : ''}`}
-                            href={`/shop?family=${world}&collection=${encodeURIComponent(collection.id)}`}
+                            href={shopFilterUrl({ family: world, collection: collection.id, category: null })}
                             key={collection.id}
                             aria-current={selectedCollection?.id === collection.id ? 'page' : undefined}
                           >
@@ -733,7 +1131,7 @@ function App() {
           </aside>
           <div className="shop-results">
             {catalogNotice}
-            {catalogState === 'ready' && (visible.length ? (
+            {catalogState === 'ready' && (sortedVisible.length ? (
               <>
                 {renderCards(pageItems)}
                 {pageCount > 1 && (
@@ -748,8 +1146,9 @@ function App() {
                   </nav>
                 )}
               </>
-            ) : <p className="notice">{t.empty}</p>)}
+            ) : <p className="notice">{searchQuery ? t.shopNoResults(searchQuery) : t.empty}{searchQuery && <> <a className="text-link" href={shopFilterUrl({ q: null })}>{t.clearShopSearch}</a></>}</p>)}
           </div>
+          <div className="shop-guidance"><EnquiryGuidance t={t} compact /></div>
         </div>
       </section>
     );
@@ -808,7 +1207,7 @@ function App() {
             <h1>{nameFor(selectedItem)}</h1>
             <p>{descriptionFor(selectedItem)}</p>
             <strong className="detail-price">{selectedItem.price_mzn != null ? `${Number(selectedItem.price_mzn).toLocaleString(language === 'pt' ? 'pt-MZ' : 'en-US')} MZN` : t.noPrice}</strong>
-            <p className="muted">{t.termsBody}</p>
+            <EnquiryGuidance t={t} compact />
             <div className="button-row"><a className="button button-primary" href={`/gift-builder?product=${encodeURIComponent(selectedItem.id)}`}>{t.buildWith}</a><a className="button button-outline" href="/gift-builder">{t.requestQuote}</a></div>
           </div>
         </div>
@@ -909,10 +1308,52 @@ function App() {
         </aside>
       </section>
     );
+  } else if (path === '/faq') {
+    page = (
+      <section className="section content-page policy-page faq-page">
+        <span className="eyebrow eyebrow-coral">{t.navHelp}</span>
+        <h1>{t.faqTitle}</h1>
+        <p className="policy-intro">{t.faqBody}</p>
+        <div className="faq-list">
+          {t.faqQuestions.map(({ question, answer }) => (
+            <details className="faq-item" key={question}>
+              <summary>{question}</summary>
+              <p>{answer}</p>
+            </details>
+          ))}
+        </div>
+        <p className="faq-contact">{t.faqContact} <a href="/contact">{t.navContact}</a>.</p>
+        <p className="faq-terms-link"><a href="/terms">{t.terms}</a></p>
+      </section>
+    );
   } else if (path === '/privacy') {
-    page = <section className="section content-page"><span className="eyebrow eyebrow-coral">{t.privacy}</span><h1>{t.privacyTitle}</h1><p>{t.privacyBody}</p><p className="muted">{t.contactOptions}</p></section>;
+    page = (
+      <section className="section content-page policy-page">
+        <span className="eyebrow eyebrow-coral">{t.privacy}</span>
+        <h1>{t.privacyTitle}</h1>
+        <p className="policy-intro">{t.privacyBody}</p>
+        {t.privacySections.map((section) => (
+          <article className="policy-section" key={section.title}>
+            <h2>{section.title}</h2>
+            {section.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+          </article>
+        ))}
+      </section>
+    );
   } else if (path === '/terms') {
-    page = <section className="section content-page"><span className="eyebrow eyebrow-coral">{t.terms}</span><h1>{t.termsTitle}</h1><p>{t.termsBody}</p></section>;
+    page = (
+      <section className="section content-page policy-page">
+        <span className="eyebrow eyebrow-coral">{t.terms}</span>
+        <h1>{t.termsTitle}</h1>
+        <p className="policy-intro">{t.termsBody}</p>
+        {t.termsSections.map((section) => (
+          <article className="policy-section" key={section.title}>
+            <h2>{section.title}</h2>
+            {section.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+          </article>
+        ))}
+      </section>
+    );
   } else {
     page = <section className="section page-section"><p className="notice">{t.notFound}</p><a href="/">{t.browse}</a></section>;
   }
@@ -928,12 +1369,11 @@ function App() {
         <nav className={`main-nav${mobileMenuOpen ? ' nav-open' : ''}`} aria-label={language === 'en' ? 'Main navigation' : 'Navegação principal'}>
           <a className={path === '/' ? 'nav-active' : undefined} href="/" aria-current={path === '/' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>{t.navHome}</a>
           <a className={path === '/shop' ? 'nav-active' : undefined} href="/shop" aria-current={path === '/shop' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>{t.navShop}</a>
-          <a href="/shop" onClick={() => setMobileMenuOpen(false)}>{t.navCollections}</a>
           <a className={path === '/gift-builder' ? 'nav-active' : undefined} href="/gift-builder" aria-current={path === '/gift-builder' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>{t.navBuilder}</a>
-          <a href="/gift-builder" onClick={() => setMobileMenuOpen(false)}>{t.navIdeas}</a>
           <a className={path === '/corporate' ? 'nav-active' : undefined} href="/corporate" aria-current={path === '/corporate' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>{t.navCorporate}</a>
           <a className={path === '/about' ? 'nav-active' : undefined} href="/about" aria-current={path === '/about' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>{t.navAbout}</a>
           <a className={path === '/contact' ? 'nav-active' : undefined} href="/contact" aria-current={path === '/contact' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>{t.navContact}</a>
+          <a className={path === '/faq' ? 'nav-active' : undefined} href="/faq" aria-current={path === '/faq' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>{t.navHelp}</a>
         </nav>
         <div className="header-actions">
           <button
@@ -947,9 +1387,6 @@ function App() {
           </button>
           <a className="header-icon-link" href="/shop" aria-label={t.searchGifts} title={t.searchGifts}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.6" /><path d="m16 16 4.3 4.3" /></svg>
-          </a>
-          <a className="header-icon-link" href="/gift-builder" aria-label={t.giftBuilder} title={t.giftBuilder}>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 8.5h15l-1 12h-13l-1-12Z" /><path d="M8.5 8.5V6a3.5 3.5 0 0 1 7 0v2.5M12 12v5" /></svg>
           </a>
           <div className="language-switch" aria-label={t.languageLabel}>
             <button type="button" onClick={() => setLanguage('en')} aria-pressed={language === 'en'}>EN</button>
@@ -965,13 +1402,12 @@ function App() {
           >
             <span aria-hidden="true">{theme === 'dark' ? '☼' : '☾'}</span>
           </button>
-          <a className="header-cta" href="/gift-builder">{t.create}<span aria-hidden="true">→</span></a>
         </div>
       </header>
       <main>{page}</main>
       <footer className="site-footer">
         <div className="footer-top"><a className="brand brand-footer" href="/"><img src="/official-logo.png" alt="The Discovery Box" /></a><span className="footer-description">{t.footer}</span></div>
-        <div className="footer-bottom"><span>© {new Date().getFullYear()} The Discovery Box</span><div><a href="/privacy">{t.privacy}</a><a href="/terms">{t.terms}</a><a href="/contact">{t.navContact}</a></div></div>
+        <div className="footer-bottom"><span>© {new Date().getFullYear()} The Discovery Box</span><div><a href="/faq">{t.navHelp}</a><a href="/privacy">{t.privacy}</a><a href="/terms">{t.terms}</a><a href="/contact">{t.navContact}</a></div></div>
       </footer>
     </div>
     <AssistantWidget
@@ -1234,6 +1670,8 @@ function GiftBuilder({
   return (
     <section className="section builder-page">
       <div className="builder-heading"><span className="eyebrow eyebrow-coral">{t.builderEyebrow}</span><h1>{t.builderTitle}</h1></div>
+      <EnquiryGuidance t={t} />
+      <p className="builder-orientation">{t.builderOrientation}</p>
       <div className="step-track" aria-label={`${t.step} ${step} ${t.of} 3`}>
         {[1, 2, 3].map((item) => <span className={item <= step ? 'step-dot step-current' : 'step-dot'} key={item}>{item}</span>)}
       </div>
@@ -1295,11 +1733,26 @@ function GiftBuilder({
           </div>}
           {step === 3 && <form className="builder-panel review-panel" onSubmit={submit}>
             <h2>{t.review}</h2>
+            <p className="review-instructions">{t.reviewInstructions}</p>
             <div className="review-summary">
-              <p><strong>{t.occasion}:</strong> {selectedOccasion}</p><p><strong>{t.recipient}:</strong> {selectedRecipient}</p>
-              {budget && <p><strong>{t.budget}:</strong> {Number(budget).toLocaleString(language === 'pt' ? 'pt-MZ' : 'en-US')} MZN</p>}
-              {preferences && <p><strong>{t.interests}:</strong> {preferences}</p>}
-              {selectedProducts.length > 0 && <ul>{selectedProducts.map((item) => <li key={item.id}>{nameFor(item)}{item.price_mzn != null ? ` — ${Number(item.price_mzn).toLocaleString(language === 'pt' ? 'pt-MZ' : 'en-US')} MZN` : ''}</li>)}</ul>}
+              <div className="review-summary-section">
+                <div className="review-summary-heading">
+                  <strong>{t.giftDetails}</strong>
+                  <button className="text-link" type="button" onClick={() => setStep(1)}>{t.editGiftDetails}</button>
+                </div>
+                <p><strong>{t.occasion}:</strong> {selectedOccasion}</p><p><strong>{t.recipient}:</strong> {selectedRecipient}</p>
+                {budget && <p><strong>{t.budget}:</strong> {Number(budget).toLocaleString(language === 'pt' ? 'pt-MZ' : 'en-US')} MZN</p>}
+                {preferences && <p><strong>{t.interests}:</strong> {preferences}</p>}
+              </div>
+              <div className="review-summary-section">
+                <div className="review-summary-heading">
+                  <strong>{t.chooseProducts}</strong>
+                  <button className="text-link" type="button" onClick={() => setStep(2)}>{t.editProductChoices}</button>
+                </div>
+                {selectedProducts.length > 0
+                  ? <ul>{selectedProducts.map((item) => <li key={item.id}>{nameFor(item)}{item.price_mzn != null ? ` — ${Number(item.price_mzn).toLocaleString(language === 'pt' ? 'pt-MZ' : 'en-US')} MZN` : ''}</li>)}</ul>
+                  : <p>{t.noProductsSelected}</p>}
+              </div>
             </div>
             <label>{t.cardMessage}<textarea maxLength={500} value={cardMessage} onChange={(event) => setCardMessage(event.target.value)} /></label>
             <div className="ai-panel">
@@ -1395,6 +1848,20 @@ function GiftBuilder({
         </section>
       </div>}
     </section>
+  );
+}
+
+function EnquiryGuidance({ t, compact = false }: { t: typeof copy[Language]; compact?: boolean }) {
+  return (
+    <aside className={`enquiry-guidance${compact ? ' enquiry-guidance-compact' : ''}`}>
+      <strong>{t.enquiryProcessTitle}</strong>
+      <p>
+        {t.enquiryProcess}{' '}
+        <a href="/faq">{t.navHelp}</a>
+        {' · '}
+        <a href="/terms">{t.terms}</a>
+      </p>
+    </aside>
   );
 }
 

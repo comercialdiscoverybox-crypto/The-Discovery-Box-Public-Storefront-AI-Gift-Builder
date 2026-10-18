@@ -26,6 +26,7 @@ The root [`../render.yaml`](../render.yaml) defines the existing staff service a
 - `SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY` (publishable/anonymous key only)
 - `OLLAMA_API_KEY` (Ollama Cloud key; server-side only)
+- `PUBLIC_SITE_URL` (optional canonical public origin, such as `https://store.example.com`; otherwise the storefront uses the incoming request origin)
 
 Add `BREVO_API_KEY`, `BREVO_FROM_EMAIL`, and `BREVO_FROM_NAME` to enable email-only enquiries. Enquiries are delivered to `BREVO_FROM_EMAIL` (use the Discovery Box commercial inbox) as a responsive HTML email with an A5 portrait print stylesheet; replies go to the customer's submitted email address. Keep the API key server-side and verify the sender address in Brevo. Set `PUBLIC_CONTACT_EMAIL` and/or `PUBLIC_WHATSAPP_URL` on the deployed storefront service to show approved contact links on the Contact page. Email must be a valid address; WhatsApp must be a `https://wa.me/` or `https://api.whatsapp.com/` URL. Image generation is disabled by default; only after a provider budget and quota are approved, add `GEMINI_API_KEY` and set `AI_IMAGE_ENABLED=true`.
 
@@ -37,4 +38,4 @@ Email enquiries and image generation return an explicit unavailable response unt
 
 The app has small per-process rate limits. Render Free may sleep and restart, so it is suitable only as a preview; the in-memory rate limit is not a durable or distributed abuse-prevention control. Before production, confirm the current Render plan behavior, add durable abuse protection if needed, verify unauthenticated Supabase behavior against the live project, review the privacy/terms copy, and confirm the public contact details, catalogue entries and media rights.
 
-The website includes draft privacy and terms copy that must be reviewed and approved by the company before public launch. Image generation needs a separately approved provider budget and request quota; do not add a live AI key until those limits are agreed.
+The public FAQ, privacy, and terms pages are drafts based on the assistant knowledge base and customer FAQ; they are not company or legal approval. Before public launch, the company must review and approve them, confirm the data-retention period, privacy-request process and data-controller details, verify the order/refund/loyalty terms against current operations and applicable law, and confirm public contact information. Image generation needs a separately approved provider budget and request quota; do not add a live AI key until those limits are agreed.

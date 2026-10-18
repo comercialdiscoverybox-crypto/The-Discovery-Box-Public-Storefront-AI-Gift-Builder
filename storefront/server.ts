@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
 import { createServer as createViteServer } from 'vite';
+import { getCanonicalSearchParams, getPageMetadata, type MetadataLanguage, type PageMetadataProduct } from './pageMetadata';
 
 const directory = path.join(process.cwd(), 'storefront');
 export const app = express();
@@ -79,6 +80,119 @@ function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (character) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   })[character] || character);
+}
+
+export function renderPageDocument(
+  html: string,
+  pathname: string,
+  searchParams: URLSearchParams,
+  language: MetadataLanguage,
+  origin: string,
+  product?: PageMetadataProduct,
+): string {
+  const metadata = getPageMetadata(pathname, language, searchParams, product);
+  const canonicalParams = getCanonicalSearchParams(searchParams).toString();
+  const canonicalUrl = `${origin}${pathname}${canonicalParams ? `?${canonicalParams}` : ''}`;
+  const imageUrl = new URL(metadata.image, origin).toString();
+  const escapedTitle = escapeHtml(metadata.title);
+  const escapedDescription = escapeHtml(metadata.description);
+  const escapedImage = escapeHtml(imageUrl);
+  const escapedCanonical = escapeHtml(canonicalUrl);
+  const escapedLocale = language === 'pt' ? 'pt_MZ' : 'en_US';
+  const metadataMarkup = [
+    `<title>${escapedTitle}</title>`,
+    `<meta name="description" content="${escapedDescription}" />`,
+    `<meta name="robots" content="${metadata.robots}" />`,
+    `<link rel="canonical" href="${escapedCanonical}" />`,
+    '<meta property="og:site_name" content="The Discovery Box" />',
+    `<meta property="og:type" content="${metadata.type}" />`,
+    `<meta property="og:title" content="${escapedTitle}" />`,
+    `<meta property="og:description" content="${escapedDescription}" />`,
+    `<meta property="og:url" content="${escapedCanonical}" />`,
+    `<meta property="og:locale" content="${escapedLocale}" />`,
+    `<meta property="og:image" content="${escapedImage}" />`,
+    `<meta property="og:image:alt" content="${escapedTitle}" />`,
+    '<meta name="twitter:card" content="summary_large_image" />',
+    `<meta name="twitter:title" content="${escapedTitle}" />`,
+    `<meta name="twitter:description" content="${escapedDescription}" />`,
+    `<meta name="twitter:image" content="${escapedImage}" />`,
+    `<meta name="twitter:image:alt" content="${escapedTitle}" />`,
+  ].join('\n    ');
+  const marker = /<!-- SEO_METADATA_START -->[\s\S]*?<!-- SEO_METADATA_END -->/;
+  if (!marker.test(html)) throw new Error('SEO metadata markers are missing from the storefront document');
+  const documentWithMetadata = html.replace(
+    marker,
+    `<!-- SEO_METADATA_START -->\n    ${metadataMarkup}\n    <!-- SEO_METADATA_END -->`,
+  );
+  return documentWithMetadata.replace(/<html lang="[^"]*"/i, `<html lang="${language}"`);
+}
+
+async function getSeoProduct(id: string, language: MetadataLanguage): Promise<PageMetadataProduct | undefined> {
+  const supabase = getPublicSupabase();
+  if (!supabase) return undefined;
+  try {
+    const { data, error } = await supabase
+      .from('public_catalog_items')
+      .select('id,name_en,name_pt,description_en,description_pt,images,primary_image_index')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) {
+      console.error('Product SEO metadata lookup failed', { code: error.code || 'unknown' });
+      return undefined;
+    }
+    if (!data) return undefined;
+    const name = language === 'pt' ? data.name_pt : data.name_en;
+    const description = language === 'pt' ? data.description_pt : data.description_en;
+    if (typeof name !== 'string' || typeof description !== 'string') return undefined;
+    const images = Array.isArray(data.images) ? data.images : [];
+    const imageIndex = Number.isSafeInteger(data.primary_image_index) ? data.primary_image_index : 0;
+    const imageValue = images[imageIndex] || images[0];
+    const image = typeof imageValue === 'string' && imageValue
+      ? toPublicCatalogImageUrl(imageValue, process.env.SUPABASE_URL?.trim() || '')
+      : undefined;
+    return { id, name, description, image };
+  } catch (error) {
+    console.error('Product SEO metadata lookup failed', error);
+    return undefined;
+  }
+}
+
+function requestLanguage(req: express.Request): MetadataLanguage {
+  return req.get('accept-language')?.toLowerCase().startsWith('pt') ? 'pt' : 'en';
+}
+
+function requestOrigin(req: express.Request): string {
+  const configuredUrl = process.env.PUBLIC_SITE_URL?.trim();
+  if (configuredUrl) {
+    try {
+      const configuredOrigin = new URL(configuredUrl);
+      if (configuredOrigin.protocol === 'http:' || configuredOrigin.protocol === 'https:') {
+        return configuredOrigin.origin;
+      }
+    } catch (error) {
+      console.error('PUBLIC_SITE_URL is invalid; using the request origin', error);
+    }
+  }
+  try {
+    return new URL(`${req.protocol}://${req.get('host')}`).origin;
+  } catch (error) {
+    console.error('Could not determine the storefront origin', error);
+    return 'http://localhost';
+  }
+}
+
+async function getPageDocument(html: string, req: express.Request): Promise<string> {
+  const language = requestLanguage(req);
+  let product: PageMetadataProduct | undefined;
+  if (req.path.startsWith('/product/')) {
+    try {
+      product = await getSeoProduct(decodeURIComponent(req.path.slice('/product/'.length)), language);
+    } catch (error) {
+      console.error('Product URL could not be decoded for SEO metadata', error);
+    }
+  }
+  const requestedUrl = new URL(req.originalUrl, requestOrigin(req));
+  return renderPageDocument(html, req.path, requestedUrl.searchParams, language, requestOrigin(req), product);
 }
 
 function logApiCall(
@@ -945,7 +1059,14 @@ async function start() {
   if (production) {
     const clientDirectory = path.join(directory, '..', 'dist', 'storefront', 'client');
     app.use(express.static(clientDirectory, { index: false, maxAge: '1h' }));
-    app.get('*', (_req, res) => res.sendFile(path.join(clientDirectory, 'index.html')));
+    app.get('*', async (req, res, next) => {
+      try {
+        const html = fs.readFileSync(path.join(clientDirectory, 'index.html'), 'utf8');
+        res.status(200).type('html').send(await getPageDocument(html, req));
+      } catch (error) {
+        next(error);
+      }
+    });
   } else {
     const vite = await createViteServer({
       configFile: path.join(directory, 'vite.config.ts'),
@@ -957,7 +1078,8 @@ async function start() {
       try {
         const htmlFile = path.join(directory, 'client', 'index.html');
         const html = fs.readFileSync(htmlFile, 'utf8');
-        res.status(200).type('html').send(await vite.transformIndexHtml(req.originalUrl, html));
+        const transformedHtml = await vite.transformIndexHtml(req.originalUrl, html);
+        res.status(200).type('html').send(await getPageDocument(transformedHtml, req));
       } catch (error) {
         vite.ssrFixStacktrace(error as Error);
         next(error);

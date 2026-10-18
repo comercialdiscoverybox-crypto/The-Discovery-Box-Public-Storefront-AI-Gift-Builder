@@ -5,7 +5,8 @@ import path from 'node:path';
 import { after, before, test } from 'node:test';
 
 process.env.NODE_ENV = 'test';
-const { app, toPublicCatalogImageUrl } = await import('../storefront/server.ts');
+const { app, renderPageDocument, toPublicCatalogImageUrl } = await import('../storefront/server.ts');
+const { getPageMetadata } = await import('../storefront/pageMetadata.ts');
 for (const key of [
   'SUPABASE_URL',
   'SUPABASE_PUBLISHABLE_KEY',
@@ -41,6 +42,42 @@ test('storefront health endpoint is public and omits Express identification', as
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('x-powered-by'), null);
   assert.deepEqual(await response.json(), { status: 'ok' });
+});
+
+test('page metadata renders route-specific, escaped social previews and canonical URLs', () => {
+  assert.equal(getPageMetadata('/faq', 'en').title, 'Customer FAQ | The Discovery Box');
+  assert.match(getPageMetadata('/faq', 'pt').description, /amostras e fidelidade/);
+
+  const html = '<html lang="en"><head><!-- SEO_METADATA_START --><title>default</title><!-- SEO_METADATA_END --></head></html>';
+  const productHtml = renderPageDocument(
+    html,
+    '/product/PRODUCT-1',
+    new URLSearchParams(),
+    'en',
+    'https://store.example',
+    {
+      id: 'PRODUCT-1',
+      name: '<Gift> & Keepsake',
+      description: 'A thoughtful gift.',
+      image: '/product-image.jpg',
+    },
+  );
+  assert.match(productHtml, /<html lang="en"/);
+  assert.match(productHtml, /<title>&lt;Gift&gt; &amp; Keepsake \| The Discovery Box<\/title>/);
+  assert.match(productHtml, /property="og:image" content="https:\/\/store\.example\/product-image\.jpg"/);
+  assert.match(productHtml, /property="og:type" content="product"/);
+
+  const searchHtml = renderPageDocument(
+    html,
+    '/shop',
+    new URLSearchParams('family=BUSINESS&q=mascot&sort=price-low'),
+    'pt',
+    'https://store.example',
+  );
+  assert.match(searchHtml, /<html lang="pt"/);
+  assert.match(searchHtml, /name="robots" content="noindex,follow"/);
+  assert.match(searchHtml, /rel="canonical" href="https:\/\/store\.example\/shop\?family=BUSINESS"/);
+  assert.match(searchHtml, /name="twitter:card" content="summary_large_image"/);
 });
 
 test('public config returns configured contact details and validates their formats', async () => {
