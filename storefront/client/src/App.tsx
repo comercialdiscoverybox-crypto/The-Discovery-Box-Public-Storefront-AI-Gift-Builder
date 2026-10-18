@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useMemo, useState, type CSSProperties, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import AssistantWidget from './AssistantWidget';
+import type { AssistantGiftDraft } from './assistantTypes';
 
 type Language = 'en' | 'pt';
 type Theme = 'light' | 'dark';
@@ -140,6 +141,8 @@ const copy = {
     sending: 'Sending…',
     sent: 'Thanks! Your enquiry has been sent to our team.',
     submitError: 'We could not send your enquiry. Please try again later.',
+    submitErrorNotConfigured: 'Email delivery is not configured on the server. Please contact us directly.',
+    submitErrorProvider: 'Our email service could not accept your enquiry. Please try again later.',
     required: 'Please complete the required fields.',
     privacyConsent: 'I agree that my contact details and gift brief can be used to respond to this enquiry.',
     imageButton: 'Imagine this gift',
@@ -277,6 +280,8 @@ const copy = {
     sending: 'A enviar…',
     sent: 'Obrigado! O seu pedido foi enviado à nossa equipa.',
     submitError: 'Não foi possível enviar o pedido. Tente novamente mais tarde.',
+    submitErrorNotConfigured: 'O envio de emails não está configurado no servidor. Contacte-nos directamente.',
+    submitErrorProvider: 'O serviço de email não conseguiu aceitar o seu pedido. Tente novamente mais tarde.',
     required: 'Preencha os campos obrigatórios.',
     privacyConsent: 'Autorizo a utilização dos meus contactos e da descrição do presente para responder a este pedido.',
     imageButton: 'Imaginar este presente',
@@ -336,12 +341,26 @@ function App() {
   const [theme, setTheme] = useState<Theme>(readThemePreference);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [currentUrl, setCurrentUrl] = useState(() => `${window.location.pathname}${window.location.search}${window.location.hash}`);
+  const [assistantGiftDraft, setAssistantGiftDraft] = useState<AssistantGiftDraft | null>(null);
   const [catalog, setCatalog] = useState<CatalogResponse>({ items: [], collections: [] });
   const [catalogState, setCatalogState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [contact, setContact] = useState<{ email: string; whatsapp: string }>({ email: '', whatsapp: '' });
+  const clearAssistantGiftDraft = useCallback(() => setAssistantGiftDraft(null), []);
   const t = copy[language];
   const currentLocation = new URL(currentUrl, window.location.origin);
   const path = currentLocation.pathname.replace(/\/+$/, '') || '/';
+
+  const navigateInternal = (url: string) => {
+    const destination = new URL(url, window.location.origin);
+    if (destination.origin !== window.location.origin) return;
+    const nextUrl = `${destination.pathname}${destination.search}${destination.hash}`;
+    if (nextUrl !== currentUrl) {
+      window.history.pushState(null, '', nextUrl);
+      setCurrentUrl(nextUrl);
+    }
+    setMobileMenuOpen(false);
+    window.scrollTo(0, 0);
+  };
 
   useEffect(() => {
     const syncLocation = () => {
@@ -362,17 +381,8 @@ function App() {
     const anchor = event.target.closest('a[href]');
     if (!(anchor instanceof HTMLAnchorElement) || anchor.hasAttribute('download') || (anchor.target && anchor.target !== '_self')) return;
 
-    const destination = new URL(anchor.href);
-    if (destination.origin !== window.location.origin) return;
-
     event.preventDefault();
-    const nextUrl = `${destination.pathname}${destination.search}${destination.hash}`;
-    if (nextUrl !== currentUrl) {
-      window.history.pushState(null, '', nextUrl);
-      setCurrentUrl(nextUrl);
-    }
-    setMobileMenuOpen(false);
-    window.scrollTo(0, 0);
+    navigateInternal(anchor.href);
   };
 
   useEffect(() => {
@@ -760,7 +770,7 @@ function App() {
     ) : catalogState === 'loading' ? <section className="section page-section">{catalogNotice}</section>
       : <section className="section page-section"><p className="notice">{catalogState === 'error' ? t.catalogError : t.notFound}</p></section>;
   } else if (path === '/gift-builder') {
-    page = <GiftBuilder catalog={catalog} catalogState={catalogState} language={language} t={t} nameFor={nameFor} descriptionFor={descriptionFor} productImage={productImage} productImageStyle={productImageStyle} initialProduct={currentLocation.searchParams.get('product') || ''} />;
+    page = <GiftBuilder catalog={catalog} catalogState={catalogState} language={language} t={t} nameFor={nameFor} descriptionFor={descriptionFor} productImage={productImage} productImageStyle={productImageStyle} initialProduct={currentLocation.searchParams.get('product') || ''} assistantDraft={assistantGiftDraft} onAssistantDraftApplied={clearAssistantGiftDraft} />;
   } else if (path === '/corporate') {
     const businessCollections = catalog.collections.filter((collection) => collection.family === 'BUSINESS');
     page = (
@@ -899,13 +909,20 @@ function App() {
         <div className="footer-bottom"><span>© {new Date().getFullYear()} The Discovery Box</span><div><a href="/privacy">{t.privacy}</a><a href="/terms">{t.terms}</a><a href="/contact">{t.navContact}</a></div></div>
       </footer>
     </div>
-    <AssistantWidget language={language} />
+    <AssistantWidget
+      language={language}
+      onNavigate={navigateInternal}
+      onApplyGiftDraft={(draft) => {
+        setAssistantGiftDraft(draft);
+        navigateInternal('/gift-builder');
+      }}
+    />
     </>
   );
 }
 
 function GiftBuilder({
-  catalog, catalogState, language, t, nameFor, descriptionFor, productImage, productImageStyle, initialProduct,
+  catalog, catalogState, language, t, nameFor, descriptionFor, productImage, productImageStyle, initialProduct, assistantDraft, onAssistantDraftApplied,
 }: {
   catalog: CatalogResponse;
   catalogState: 'loading' | 'ready' | 'error';
@@ -916,6 +933,8 @@ function GiftBuilder({
   productImage: (item: CatalogItem) => string;
   productImageStyle: (item: CatalogItem) => CSSProperties;
   initialProduct: string;
+  assistantDraft: AssistantGiftDraft | null;
+  onAssistantDraftApplied: () => void;
 }) {
   const [step, setStep] = useState(1);
   const [selected, setSelected] = useState<string[]>(initialProduct ? [initialProduct] : []);
@@ -932,10 +951,27 @@ function GiftBuilder({
   const [error, setError] = useState('');
   const [sent, setSent] = useState(false);
   const [conceptImage, setConceptImage] = useState('');
+  const appliedAssistantDraftRef = useRef<AssistantGiftDraft | null>(null);
   const selectedProducts = catalog.items.filter((item) => selected.includes(item.id));
   const selectedNames = selectedProducts.map(nameFor);
   const selectedOccasion = occasion || (language === 'en' ? 'Something else' : 'Outra ocasião');
   const selectedRecipient = recipient || (language === 'en' ? 'Someone else' : 'Outra pessoa');
+
+  useEffect(() => {
+    if (!assistantDraft || appliedAssistantDraftRef.current === assistantDraft) return;
+    appliedAssistantDraftRef.current = assistantDraft;
+    setOccasion(assistantDraft.occasion);
+    setRecipient(assistantDraft.recipient);
+    setBudget(assistantDraft.budget);
+    setPreferences(assistantDraft.preferences);
+    setSelected((current) => [...new Set([
+      ...current,
+      ...assistantDraft.productIds,
+    ])].slice(0, 5));
+    setStep(1);
+    setError('');
+    onAssistantDraftApplied();
+  }, [assistantDraft, onAssistantDraftApplied]);
 
   const toggleProduct = (id: string) => setSelected((items) =>
     items.includes(id) ? items.filter((item) => item !== id) : items.length < 5 ? [...items, id] : items,
@@ -979,7 +1015,14 @@ function GiftBuilder({
           consent,
         }),
       });
-      if (!response.ok) throw new Error('Enquiry request failed');
+      if (!response.ok) {
+        setError(response.status === 503
+          ? t.submitErrorNotConfigured
+          : response.status === 502
+            ? t.submitErrorProvider
+            : t.submitError);
+        return;
+      }
       setSent(true);
     } catch {
       setError(t.submitError);
@@ -997,8 +1040,8 @@ function GiftBuilder({
       {sent ? <div className="success-card"><span className="success-icon">✓</span><h2>{t.sent}</h2><a className="button button-primary" href="/shop">{t.browse}</a></div> : (
         <>
           {step === 1 && <div className="builder-panel">
-            <label>{t.occasion}<select value={occasion} onChange={(event) => setOccasion(event.target.value)}><option value="">—</option>{t.occasions.map((item) => <option key={item}>{item}</option>)}</select></label>
-            <label>{t.recipient}<select value={recipient} onChange={(event) => setRecipient(event.target.value)}><option value="">—</option>{t.recipients.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <label>{t.occasion}<select value={occasion} onChange={(event) => setOccasion(event.target.value)}><option value="">—</option>{occasion && !(t.occasions as readonly string[]).includes(occasion) && <option>{occasion}</option>}{t.occasions.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <label>{t.recipient}<select value={recipient} onChange={(event) => setRecipient(event.target.value)}><option value="">—</option>{recipient && !(t.recipients as readonly string[]).includes(recipient) && <option>{recipient}</option>}{t.recipients.map((item) => <option key={item}>{item}</option>)}</select></label>
             <label>{t.budget}<input type="number" min="0" max="10000000" value={budget} onChange={(event) => setBudget(event.target.value)} /></label>
             <label>{t.interests}<textarea maxLength={1000} placeholder={t.interestsHint} value={preferences} onChange={(event) => setPreferences(event.target.value)} /></label>
           </div>}

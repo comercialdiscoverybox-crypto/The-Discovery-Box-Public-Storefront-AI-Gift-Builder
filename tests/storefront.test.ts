@@ -11,9 +11,9 @@ for (const key of [
   'SUPABASE_PUBLISHABLE_KEY',
   'GEMINI_API_KEY',
   'OLLAMA_API_KEY',
-  'RESEND_API_KEY',
-  'ENQUIRY_FROM_EMAIL',
-  'ENQUIRY_TO_EMAIL',
+  'BREVO_API_KEY',
+  'BREVO_FROM_EMAIL',
+  'BREVO_FROM_NAME',
 ]) {
   delete process.env[key];
 }
@@ -112,6 +112,135 @@ test('valid enquiry reports missing email configuration without claiming success
   assert.match((await response.json()).error, /not configured/i);
 });
 
+test('valid enquiry sends its details through Brevo to the Discovery Box inbox', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalInfo = console.info;
+  const apiLogs: string[] = [];
+  type BrevoEmail = {
+    sender: { name: string; email: string };
+    to: { email: string }[];
+    replyTo: { email: string };
+    subject: string;
+    htmlContent: string;
+  };
+  let providerRequest: { url: string; apiKey: string | null; body: BrevoEmail } | null = null;
+  process.env.BREVO_API_KEY = 'test-brevo-key';
+  process.env.BREVO_FROM_EMAIL = 'comercial.discoverybox@gmail.com';
+  process.env.BREVO_FROM_NAME = 'The Discovery Box';
+  console.info = (...data: Parameters<typeof console.info>) => {
+    apiLogs.push(data.map((entry) => typeof entry === 'string' ? entry : JSON.stringify(entry)).join(' '));
+  };
+  globalThis.fetch = async (input, init) => {
+    if (String(input) === 'https://api.brevo.com/v3/smtp/email') {
+      providerRequest = {
+        url: String(input),
+        apiKey: new Headers(init?.headers).get('api-key'),
+        body: JSON.parse(String(init?.body)) as BrevoEmail,
+      };
+      return new Response(null, { status: 201 });
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const response = await fetch(`${baseUrl}/api/enquiries`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Ana Example',
+        email: 'ana@example.com',
+        phone: '+258 84 123 4567',
+        language: 'pt',
+        occasion: 'Aniversário',
+        recipient: 'Amiga',
+        budget: '2500',
+        preferences: '<script>cores vivas</script>',
+        cardMessage: 'Muitas felicidades!',
+        products: ['Puzzle'],
+        consent: true,
+      }),
+    });
+    assert.equal(response.status, 202);
+    assert.deepEqual(await response.json(), { status: 'accepted' });
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.info = originalInfo;
+    delete process.env.BREVO_API_KEY;
+    delete process.env.BREVO_FROM_EMAIL;
+    delete process.env.BREVO_FROM_NAME;
+  }
+
+  assert.ok(providerRequest);
+  assert.equal(providerRequest.url, 'https://api.brevo.com/v3/smtp/email');
+  assert.equal(providerRequest.apiKey, 'test-brevo-key');
+  assert.deepEqual(providerRequest.body.sender, {
+    name: 'The Discovery Box',
+    email: 'comercial.discoverybox@gmail.com',
+  });
+  assert.deepEqual(providerRequest.body.to, [{ email: 'comercial.discoverybox@gmail.com' }]);
+  assert.deepEqual(providerRequest.body.replyTo, { email: 'ana@example.com' });
+  assert.match(providerRequest.body.htmlContent, /&lt;script&gt;cores vivas&lt;\/script&gt;/);
+  assert.match(providerRequest.body.htmlContent, /Muitas felicidades!/);
+  assert.match(providerRequest.body.subject, /Ana Example/);
+  assert.ok(apiLogs.some((entry) => entry.includes('[api] Brevo send_enquiry_email: started')));
+  assert.ok(apiLogs.some((entry) => entry.includes('[api] Brevo send_enquiry_email: succeeded')));
+  assert.ok(apiLogs.every((entry) => !entry.includes('ana@example.com') && !entry.includes('test-brevo-key')));
+});
+
+test('Brevo rejection logs safe provider diagnostics and returns a delivery error', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalInfo = console.info;
+  const originalError = console.error;
+  const apiLogs: string[] = [];
+  process.env.BREVO_API_KEY = 'test-brevo-key';
+  process.env.BREVO_FROM_EMAIL = 'comercial.discoverybox@gmail.com';
+  process.env.BREVO_FROM_NAME = 'The Discovery Box';
+  console.info = (...data: Parameters<typeof console.info>) => {
+    apiLogs.push(data.map((entry) => typeof entry === 'string' ? entry : JSON.stringify(entry)).join(' '));
+  };
+  console.error = (...data: Parameters<typeof console.error>) => {
+    apiLogs.push(data.map((entry) => typeof entry === 'string' ? entry : JSON.stringify(entry)).join(' '));
+  };
+  globalThis.fetch = async (input, init) => {
+    if (String(input) === 'https://api.brevo.com/v3/smtp/email') {
+      assert.equal(new Headers(init?.headers).get('api-key'), 'test-brevo-key');
+      return new Response(JSON.stringify({ code: 'unauthorized', message: 'Sensitive provider detail' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const response = await fetch(`${baseUrl}/api/enquiries`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Visitor',
+        email: 'visitor@example.com',
+        language: 'en',
+        occasion: 'Birthday',
+        recipient: 'Friend',
+        consent: true,
+      }),
+    });
+    assert.equal(response.status, 502);
+    assert.match((await response.json()).error, /email service could not accept/i);
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.info = originalInfo;
+    console.error = originalError;
+    delete process.env.BREVO_API_KEY;
+    delete process.env.BREVO_FROM_EMAIL;
+    delete process.env.BREVO_FROM_NAME;
+  }
+
+  assert.ok(apiLogs.some((entry) => entry.includes('[api] Brevo send_enquiry_email: failed')));
+  assert.ok(apiLogs.some((entry) => entry.includes('"status":401') && entry.includes('"code":"unauthorized"')));
+  assert.ok(apiLogs.every((entry) => !entry.includes('test-brevo-key') && !entry.includes('Sensitive provider detail')));
+});
+
 test('image generation reports provider configuration failures explicitly', async () => {
   const response = await fetch(`${baseUrl}/api/gift-image`, {
     method: 'POST',
@@ -177,7 +306,22 @@ test('assistant chat keeps Ollama credentials server-side and uses its knowledge
         authorization: new Headers(init?.headers).get('authorization'),
         body: JSON.parse(String(init?.body)) as Record<string, unknown>,
       };
-      return new Response(JSON.stringify({ message: { role: 'assistant', content: 'I can help you find a thoughtful gift.' } }), {
+      return new Response(JSON.stringify({
+        message: {
+          role: 'assistant',
+          content: JSON.stringify({
+            answer: 'Would you like me to fill in your gift brief?',
+            form_action: 'offer',
+            form_draft: {
+              occasion: 'Birthday',
+              recipient: 'Friend',
+              budget: '',
+              preferences: 'They enjoy puzzles',
+              product_ids: [],
+            },
+          }),
+        },
+      }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -195,7 +339,17 @@ test('assistant chat keeps Ollama credentials server-side and uses its knowledge
       }),
     });
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { answer: 'I can help you find a thoughtful gift.' });
+    assert.deepEqual(await response.json(), {
+      answer: 'Would you like me to fill in your gift brief?',
+      formAction: 'offer',
+      formDraft: {
+        occasion: 'Birthday',
+        recipient: 'Friend',
+        budget: '',
+        preferences: 'They enjoy puzzles',
+        productIds: [],
+      },
+    });
   } finally {
     globalThis.fetch = originalFetch;
     delete process.env.OLLAMA_API_KEY;
@@ -206,6 +360,15 @@ test('assistant chat keeps Ollama credentials server-side and uses its knowledge
   assert.equal(providerRequest.authorization, 'Bearer test-ollama-key');
   assert.equal(providerRequest.body.model, 'gemma4:31b-cloud');
   assert.equal(providerRequest.body.stream, false);
+  const format = providerRequest.body.format as {
+    type?: string;
+    properties?: { form_draft?: { anyOf?: Array<{ properties?: Record<string, unknown> }> } };
+  };
+  assert.equal(format.type, 'object');
+  assert.deepEqual(
+    Object.keys(format.properties?.form_draft?.anyOf?.[1].properties || {}).sort(),
+    ['budget', 'occasion', 'preferences', 'product_ids', 'recipient'],
+  );
   const messages = providerRequest.body.messages as Array<{ role: string; content: string }>;
   assert.equal(messages[0].role, 'system');
   assert.match(messages[0].content, /Your name is Fox, the curious and observant Discovery Box mascot/);
@@ -217,6 +380,9 @@ test('assistant chat keeps Ollama credentials server-side and uses its knowledge
   assert.match(messages[0].content, /Recommend a few relevant listed products when possible/);
   assert.match(messages[0].content, /Do not claim to place an order, send an enquiry, verify payment/);
   assert.match(messages[0].content, /Do not request sensitive personal data, payment details or proof/);
+  assert.match(messages[0].content, /latest assistant answer explicitly asks whether the customer wants help/);
+  assert.match(messages[0].content, /Never request, extract, or place a name, email address, phone number, or consent/);
+  assert.match(messages[0].content, /Markdown link using only an appropriate relative path/);
   assert.equal(messages[1].content, 'What gifts can I explore?');
 });
 

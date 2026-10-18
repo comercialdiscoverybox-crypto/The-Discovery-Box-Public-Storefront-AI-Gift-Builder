@@ -922,8 +922,15 @@ h1, h2, h3 { font-family: Manrope, sans-serif; letter-spacing: -.04em; }
   .assistant-rich-content li { padding-left: 2px; }
   .assistant-rich-content li::marker { color: var(--turquoise); font-weight: 700; }
   .assistant-rich-content strong { font-weight: 700; color: var(--navy); }
+  .assistant-rich-content a { color: #117f79; font-weight: 700; text-decoration: underline; text-decoration-color: #47bfb0; text-underline-offset: 2px; }
+  .assistant-rich-content a:hover { color: var(--navy); text-decoration-thickness: 2px; }
   .assistant-rich-content code { padding: 1px 4px; border-radius: 4px; background: var(--line); font-size: .92em; }
   :root[data-theme='dark'] .assistant-rich-content h3, :root[data-theme='dark'] .assistant-rich-content strong { color: #b8f1e6; }
+  :root[data-theme='dark'] .assistant-rich-content a { color: #83e1d2; }
+  .assistant-form-offer { display: grid; gap: 7px; margin-top: 10px; }
+  .assistant-form-offer button { min-height: 38px; padding: 8px 11px; border: 1px solid var(--turquoise); border-radius: 11px; background: var(--navy); color: #fff; font: 600 12px/1.35 'DM Sans', sans-serif; text-align: center; cursor: pointer; }
+  .assistant-form-offer button + button { border-color: var(--line); background: transparent; color: var(--ink-soft); }
+  .assistant-form-offer button:disabled { opacity: .5; cursor: wait; }
   .assistant-message-user { align-self: flex-end; border-bottom-right-radius: 5px; background: var(--navy); color: #fff; }
   .assistant-thinking { color: var(--ink-soft); font-style: italic; }
   .assistant-error { align-self: stretch; margin: 0; padding: 8px 10px; border-radius: 10px; background: #fff0ed; color: #9d3029; font-size: 12px; line-height: 1.45; }

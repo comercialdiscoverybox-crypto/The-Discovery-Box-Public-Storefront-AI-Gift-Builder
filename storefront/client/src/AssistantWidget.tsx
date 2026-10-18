@@ -1,8 +1,31 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { ReactNode } from 'react';
+import type { AssistantGiftDraft, AssistantGiftFormAction } from './assistantTypes';
 
 type Language = 'en' | 'pt';
-type Message = { role: 'user' | 'assistant'; content: string };
+type Message = {
+  role: 'user' | 'assistant';
+  content: string;
+  formAction?: AssistantGiftFormAction;
+  formDraft?: AssistantGiftDraft | null;
+};
+type AssistantWidgetProps = {
+  language: Language;
+  onNavigate: (url: string) => void;
+  onApplyGiftDraft: (draft: AssistantGiftDraft) => void;
+};
+
+function isGiftDraft(value: unknown): value is AssistantGiftDraft {
+  if (typeof value !== 'object' || value === null) return false;
+  const draft = value as Record<string, unknown>;
+  return typeof draft.occasion === 'string' &&
+    typeof draft.recipient === 'string' &&
+    typeof draft.budget === 'string' &&
+    typeof draft.preferences === 'string' &&
+    Array.isArray(draft.productIds) &&
+    draft.productIds.length <= 5 &&
+    draft.productIds.every((id) => typeof id === 'string');
+}
 
 const labels = {
   en: {
@@ -20,6 +43,11 @@ const labels = {
     keepChat: 'Keep chatting',
     endChat: 'End conversation',
     closeChat: 'Close chat',
+    fillGiftBrief: 'Yes, fill my gift brief',
+    notNow: 'Not now',
+    declinedOffer: 'Not now. Please keep helping me here.',
+    acceptedOffer: 'Yes, please fill in my gift brief.',
+    draftApplied: 'I’ve filled in the gift brief and opened the Gift builder. Please review it, add your name and email, check the privacy consent box, then submit it when you’re ready. I’ll stay here if you need help.',
   },
   pt: {
     open: 'Conversar com Fox, o teu guia de presentes',
@@ -36,11 +64,25 @@ const labels = {
     keepChat: 'Continuar a conversa',
     endChat: 'Terminar conversa',
     closeChat: 'Fechar conversa',
+    fillGiftBrief: 'Sim, preencher a descrição do presente',
+    notNow: 'Agora não',
+    declinedOffer: 'Agora não. Continua a ajudar-me por aqui, por favor.',
+    acceptedOffer: 'Sim, preenche a descrição do meu presente, por favor.',
+    draftApplied: 'Preenchi a descrição do presente e abri o Criador de presentes. Reveja os dados, introduza o seu nome e email, marque a caixa de consentimento de privacidade e envie o pedido quando estiver pronto. Continuo por aqui se precisar de ajuda.',
   },
 } as const;
 
-function renderInlineFormatting(text: string, keyPrefix: string): ReactNode[] {
-  const formatting = /(\*\*[^*\n]+?\*\*|__[^_\n]+?__|\*[^*\n]+?\*|_[^_\n]+?_|`[^`\n]+`)/g;
+function internalPath(href: string): string | null {
+  if (!href.startsWith('/') || href.startsWith('//') || href.includes('\\')) return null;
+  const destination = new URL(href, window.location.origin);
+  if (destination.origin !== window.location.origin) return null;
+  const allowedPath = new Set(['/shop', '/contact', '/gift-builder', '/corporate', '/about', '/privacy', '/terms']);
+  if (!allowedPath.has(destination.pathname) && !/^\/product\/[A-Za-z0-9_-]+$/.test(destination.pathname)) return null;
+  return `${destination.pathname}${destination.search}${destination.hash}`;
+}
+
+function renderInlineFormatting(text: string, keyPrefix: string, onNavigate: (url: string) => void): ReactNode[] {
+  const formatting = /(\[[^\]\n]+\]\(\/(?:shop|contact|gift-builder|corporate|about|privacy|terms|product\/[A-Za-z0-9_-]+)(?:\?[^\s)]*)?\)|\*\*[^*\n]+?\*\*|__[^_\n]+?__|\*[^*\n]+?\*|_[^_\n]+?_|`[^`\n]+`)/g;
   const parts: ReactNode[] = [];
   let lastIndex = 0;
   let partIndex = 0;
@@ -49,15 +91,23 @@ function renderInlineFormatting(text: string, keyPrefix: string): ReactNode[] {
   while ((match = formatting.exec(text))) {
     if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
     const token = match[0];
-    const isBold = token.startsWith('**') || token.startsWith('__');
-    const isCode = token.startsWith('`');
-    const delimiterLength = isBold ? 2 : 1;
-    const content = token.slice(delimiterLength, token.length - delimiterLength);
-    parts.push(isBold
-      ? <strong key={`${keyPrefix}-${partIndex}`}>{content}</strong>
-      : isCode
-        ? <code key={`${keyPrefix}-${partIndex}`}>{content}</code>
-        : <em key={`${keyPrefix}-${partIndex}`}>{content}</em>);
+    const link = token.match(/^\[([^\]]+)\]\((\/[^)\s]*)\)$/);
+    if (link) {
+      const href = internalPath(link[2]);
+      parts.push(href
+        ? <a key={`${keyPrefix}-${partIndex}`} href={href} onClick={(event) => { event.preventDefault(); onNavigate(href); }}>{link[1]}</a>
+        : link[1]);
+    } else {
+      const isBold = token.startsWith('**') || token.startsWith('__');
+      const isCode = token.startsWith('`');
+      const delimiterLength = isBold ? 2 : 1;
+      const content = token.slice(delimiterLength, token.length - delimiterLength);
+      parts.push(isBold
+        ? <strong key={`${keyPrefix}-${partIndex}`}>{content}</strong>
+        : isCode
+          ? <code key={`${keyPrefix}-${partIndex}`}>{content}</code>
+          : <em key={`${keyPrefix}-${partIndex}`}>{content}</em>);
+    }
     lastIndex = formatting.lastIndex;
     partIndex += 1;
   }
@@ -65,7 +115,7 @@ function renderInlineFormatting(text: string, keyPrefix: string): ReactNode[] {
   return parts;
 }
 
-function AssistantReply({ content }: { content: string }) {
+function AssistantReply({ content, onNavigate }: { content: string; onNavigate: (url: string) => void }) {
   const blocks: ReactNode[] = [];
   const lines = content.replace(/\r\n?/g, '\n').split('\n');
   let paragraph: string[] = [];
@@ -77,7 +127,7 @@ function AssistantReply({ content }: { content: string }) {
     if (!paragraph.length) return;
     blocks.push(
       <p key={`paragraph-${blockIndex++}`}>
-        {renderInlineFormatting(paragraph.join(' '), `paragraph-${blockIndex}`)}
+        {renderInlineFormatting(paragraph.join(' '), `paragraph-${blockIndex}`, onNavigate)}
       </p>,
     );
     paragraph = [];
@@ -89,7 +139,7 @@ function AssistantReply({ content }: { content: string }) {
     blocks.push(
       <List key={`list-${blockIndex++}`}>
         {listItems.map((item, index) => (
-          <li key={index}>{renderInlineFormatting(item, `list-${blockIndex}-${index}`)}</li>
+          <li key={index}>          {renderInlineFormatting(item, `list-${blockIndex}-${index}`, onNavigate)}</li>
         ))}
       </List>,
     );
@@ -108,7 +158,7 @@ function AssistantReply({ content }: { content: string }) {
       flushList();
       blocks.push(
         <h3 key={`heading-${blockIndex++}`}>
-          {renderInlineFormatting(heading[2], `heading-${blockIndex}`)}
+          {renderInlineFormatting(heading[2], `heading-${blockIndex}`, onNavigate)}
         </h3>,
       );
     } else if (unordered || ordered) {
@@ -145,7 +195,7 @@ function FoxIcon() {
   );
 }
 
-export default function AssistantWidget({ language }: { language: Language }) {
+export default function AssistantWidget({ language, onNavigate, onApplyGiftDraft }: AssistantWidgetProps) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
@@ -175,12 +225,13 @@ export default function AssistantWidget({ language }: { language: Language }) {
     }
   }, [messages, pending, error]);
 
-  const sendMessage = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const content = draft.trim();
+  const sendContent = async (content: string) => {
     if (!content || pending) return;
 
-    const nextMessages = [...messages, { role: 'user' as const, content }].slice(-20);
+    const nextMessages = [
+      ...messages.map((message) => ({ ...message, formAction: 'none' as const })),
+      { role: 'user' as const, content },
+    ].slice(-20);
     setMessages(nextMessages);
     setDraft('');
     setError('');
@@ -199,16 +250,27 @@ export default function AssistantWidget({ language }: { language: Language }) {
         body: JSON.stringify({ language, messages: history }),
         signal: controller.signal,
       });
-      let result: { answer?: string; error?: string };
+      let result: {
+        answer?: string;
+        error?: string;
+        formAction?: AssistantGiftFormAction;
+        formDraft?: AssistantGiftDraft | null;
+      };
       try {
-        result = await response.json() as { answer?: string; error?: string };
+        result = await response.json() as typeof result;
       } catch {
         throw new Error(copy.unavailable);
       }
       if (!response.ok || !result.answer) {
         throw new Error(result.error || copy.unavailable);
       }
-      const assistantMessage: Message = { role: 'assistant', content: result.answer };
+      const formAction = result.formAction === 'offer' || result.formAction === 'apply'
+        ? result.formAction
+        : 'none';
+      const formDraft = isGiftDraft(result.formDraft) ? result.formDraft : null;
+      if (formAction !== 'none' && !formDraft) throw new Error(copy.unavailable);
+      const assistantMessage: Message = { role: 'assistant', content: result.answer, formAction, formDraft };
+      if (formAction === 'apply' && formDraft) onApplyGiftDraft(formDraft);
       setMessages((current) => [...current, assistantMessage].slice(-20));
     } catch (cause) {
       if (controller.signal.aborted) return;
@@ -221,6 +283,22 @@ export default function AssistantWidget({ language }: { language: Language }) {
         inputRef.current?.focus();
       }
     }
+  };
+
+  const sendMessage = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void sendContent(draft.trim());
+  };
+
+  const acceptGiftDraft = (index: number, giftDraft: AssistantGiftDraft) => {
+    onApplyGiftDraft(giftDraft);
+    setMessages((current) => [
+      ...current.map((message, messageIndex) => messageIndex === index
+        ? { ...message, formAction: 'none' as const }
+        : message),
+      { role: 'user' as const, content: copy.acceptedOffer },
+      { role: 'assistant' as const, content: copy.draftApplied },
+    ].slice(-20));
   };
 
   const endConversation = () => {
@@ -252,7 +330,17 @@ export default function AssistantWidget({ language }: { language: Language }) {
             <p className="assistant-message assistant-message-bot">{copy.intro}</p>
             {messages.map((message, index) => (
               message.role === 'assistant'
-                ? <div className="assistant-message assistant-message-bot" key={`${index}-${message.role}`}><AssistantReply content={message.content} /></div>
+                ? (
+                  <div className="assistant-message assistant-message-bot" key={`${index}-${message.role}`}>
+                    <AssistantReply content={message.content} onNavigate={onNavigate} />
+                    {message.formAction === 'offer' && message.formDraft && (
+                      <div className="assistant-form-offer">
+                        <button type="button" onClick={() => acceptGiftDraft(index, message.formDraft!)}>{copy.fillGiftBrief}</button>
+                        <button type="button" onClick={() => void sendContent(copy.declinedOffer)} disabled={pending}>{copy.notNow}</button>
+                      </div>
+                    )}
+                  </div>
+                )
                 : <p className="assistant-message assistant-message-user" key={`${index}-${message.role}`}>{message.content}</p>
             ))}
             {pending && <p className="assistant-message assistant-message-bot assistant-thinking">{copy.sending}</p>}
