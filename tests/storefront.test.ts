@@ -47,6 +47,8 @@ test('storefront health endpoint is public and omits Express identification', as
 test('page metadata renders route-specific, escaped social previews and canonical URLs', () => {
   assert.equal(getPageMetadata('/faq', 'en').title, 'Customer FAQ | The Discovery Box');
   assert.match(getPageMetadata('/faq', 'pt').description, /amostras e fidelidade/);
+  assert.equal(getPageMetadata('/reviews', 'en').title, 'Reviews & Problem Reports | The Discovery Box');
+  assert.match(getPageMetadata('/reviews', 'pt').description, /avaliação privada|comunique um problema/);
 
   const html = '<html lang="en"><head><!-- SEO_METADATA_START --><title>default</title><!-- SEO_METADATA_END --></head></html>';
   const productHtml = renderPageDocument(
@@ -204,6 +206,174 @@ test('enquiry API rejects unconsented or malformed input before provider calls',
     }),
   });
   assert.equal(response.status, 400);
+});
+
+test('review API rejects invalid submissions and reports missing storage or email configuration', async () => {
+  const invalidResponse = await fetch(`${baseUrl}/api/reviews`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ language: 'en', submissionType: 'review', rating: 6, review: 'Great service', consent: true }),
+  });
+  assert.equal(invalidResponse.status, 400);
+
+  const missingConfigResponse = await fetch(`${baseUrl}/api/reviews`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ language: 'en', submissionType: 'review', rating: 5, review: 'Great service', consent: true }),
+  });
+  assert.equal(missingConfigResponse.status, 503);
+  assert.match((await missingConfigResponse.json()).error, /not configured/i);
+});
+
+test('review API stores private feedback and sends an escaped email notification', async () => {
+  const originalFetch = globalThis.fetch;
+  let storedReview: Record<string, unknown> | null = null;
+  let emailRequest: { body: { subject: string; htmlContent: string; to: { email: string }[] } } | null = null;
+  process.env.SUPABASE_URL = 'https://customer-reviews-test.supabase.co';
+  process.env.SUPABASE_PUBLISHABLE_KEY = 'test-public-key';
+  process.env.BREVO_API_KEY = 'test-brevo-key';
+  process.env.BREVO_FROM_EMAIL = 'comercial.discoverybox@gmail.com';
+  process.env.BREVO_FROM_NAME = 'The Discovery Box';
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url.includes('/rest/v1/customer_reviews')) {
+      assert.equal(init?.method, 'POST');
+      storedReview = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response(null, { status: 201 });
+    }
+    if (url === 'https://api.brevo.com/v3/smtp/email') {
+      emailRequest = {
+        body: JSON.parse(String(init?.body)) as { subject: string; htmlContent: string; to: { email: string }[] },
+      };
+      return new Response(null, { status: 201 });
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const response = await fetch(`${baseUrl}/api/reviews`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        language: 'pt',
+        submissionType: 'review',
+        rating: 4,
+        review: 'Muito bom <script>alert(1)</script>',
+        name: 'Ana & Rui',
+        email: '',
+        orderReference: '',
+        consent: true,
+      }),
+    });
+    assert.equal(response.status, 202);
+    assert.deepEqual(await response.json(), { status: 'saved', emailNotified: true });
+  } finally {
+    globalThis.fetch = originalFetch;
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_PUBLISHABLE_KEY;
+    delete process.env.BREVO_API_KEY;
+    delete process.env.BREVO_FROM_EMAIL;
+    delete process.env.BREVO_FROM_NAME;
+  }
+
+  assert.deepEqual(storedReview, {
+    submission_type: 'review',
+    rating: 4,
+    message: 'Muito bom <script>alert(1)</script>',
+    customer_name: 'Ana & Rui',
+    email: null,
+    order_reference: null,
+    language: 'pt',
+  });
+  assert.ok(emailRequest);
+  assert.deepEqual(emailRequest.body.to, [{ email: 'comercial.discoverybox@gmail.com' }]);
+  assert.match(emailRequest.body.subject, /Nova avaliação de cliente/);
+  assert.match(emailRequest.body.htmlContent, /Muito bom &lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+  assert.doesNotMatch(emailRequest.body.htmlContent, /<script>alert\(1\)<\/script>/);
+  assert.match(emailRequest.body.htmlContent, /Ana &amp; Rui/);
+  assert.match(emailRequest.body.htmlContent, /não foi publicado no website/);
+});
+
+test('problem reports require a valid contact email and are stored and emailed privately', async () => {
+  const originalFetch = globalThis.fetch;
+  let storedReport: Record<string, unknown> | null = null;
+  let emailRequest: { body: { subject: string; htmlContent: string; replyTo?: { email: string } } } | null = null;
+  process.env.SUPABASE_URL = 'https://customer-reports-test.supabase.co';
+  process.env.SUPABASE_PUBLISHABLE_KEY = 'test-public-key';
+  process.env.BREVO_API_KEY = 'test-brevo-key';
+  process.env.BREVO_FROM_EMAIL = 'comercial.discoverybox@gmail.com';
+  process.env.BREVO_FROM_NAME = 'The Discovery Box';
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url.includes('/rest/v1/customer_reviews')) {
+      storedReport = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response(null, { status: 201 });
+    }
+    if (url === 'https://api.brevo.com/v3/smtp/email') {
+      emailRequest = {
+        body: JSON.parse(String(init?.body)) as { subject: string; htmlContent: string; replyTo?: { email: string } },
+      };
+      return new Response(null, { status: 201 });
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const missingEmail = await fetch(`${baseUrl}/api/reviews`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        language: 'en',
+        submissionType: 'problem',
+        rating: null,
+        review: 'The item arrived damaged',
+        email: '',
+        orderReference: 'BOX-123',
+        consent: true,
+      }),
+    });
+    assert.equal(missingEmail.status, 400);
+
+    const response = await fetch(`${baseUrl}/api/reviews`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        language: 'en',
+        submissionType: 'problem',
+        rating: null,
+        review: 'The item arrived damaged <img src=x>',
+        name: 'Sam Customer',
+        email: 'sam@example.com',
+        orderReference: 'BOX-123',
+        consent: true,
+      }),
+    });
+    assert.equal(response.status, 202);
+    assert.deepEqual(await response.json(), { status: 'saved', emailNotified: true });
+  } finally {
+    globalThis.fetch = originalFetch;
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_PUBLISHABLE_KEY;
+    delete process.env.BREVO_API_KEY;
+    delete process.env.BREVO_FROM_EMAIL;
+    delete process.env.BREVO_FROM_NAME;
+  }
+
+  assert.deepEqual(storedReport, {
+    submission_type: 'problem',
+    rating: null,
+    message: 'The item arrived damaged <img src=x>',
+    customer_name: 'Sam Customer',
+    email: 'sam@example.com',
+    order_reference: 'BOX-123',
+    language: 'en',
+  });
+  assert.ok(emailRequest);
+  assert.equal(emailRequest.body.replyTo?.email, 'sam@example.com');
+  assert.match(emailRequest.body.subject, /New problem report/);
+  assert.match(emailRequest.body.htmlContent, /The item arrived damaged &lt;img src=x&gt;/);
+  assert.match(emailRequest.body.htmlContent, /BOX-123/);
+  assert.doesNotMatch(emailRequest.body.htmlContent, /<img src=x>/);
 });
 
 test('valid enquiry reports missing email configuration without claiming success', async () => {
@@ -948,4 +1118,36 @@ test('catalogue views use caller RLS and grant only public catalogue columns', (
   assert.match(migration, /CREATE POLICY "Public catalogue active items"[\s\S]*USING \(active = TRUE\)/);
   assert.match(migration, /CREATE POLICY "Public catalogue active collections"[\s\S]*i\.active = TRUE/);
   assert.match(migration, /CREATE POLICY "Public catalogue active categories"[\s\S]*i\.active = TRUE/);
+});
+
+test('customer reviews are privately insertable but not readable by public roles', () => {
+  const migration = readFileSync(path.join(
+    process.cwd(),
+    'supabase',
+    'migrations',
+    '20261018010000_private_customer_reviews.sql',
+  ), 'utf8');
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.customer_reviews/);
+  assert.match(migration, /rating BETWEEN 1 AND 5/);
+  assert.match(migration, /char_length\(trim\(review\)\) BETWEEN 5 AND 2000/);
+  assert.match(migration, /ALTER TABLE public\.customer_reviews ENABLE ROW LEVEL SECURITY/);
+  assert.match(migration, /REVOKE ALL ON TABLE public\.customer_reviews FROM PUBLIC, anon, authenticated/);
+  assert.match(migration, /GRANT INSERT \([\s\S]*\)\s+ON TABLE public\.customer_reviews TO anon, authenticated/);
+  assert.match(migration, /FOR INSERT[\s\S]*WITH CHECK/);
+  assert.doesNotMatch(migration, /GRANT SELECT/);
+});
+
+test('problem report migration keeps submissions private and requires report follow-up email', () => {
+  const migration = readFileSync(path.join(
+    process.cwd(),
+    'supabase',
+    'migrations',
+    '20261018020000_customer_problem_reports.sql',
+  ), 'utf8');
+  assert.match(migration, /RENAME COLUMN review TO message/);
+  assert.match(migration, /ADD COLUMN submission_type TEXT NOT NULL DEFAULT 'review'/);
+  assert.match(migration, /ADD COLUMN email TEXT/);
+  assert.match(migration, /submission_type = 'problem'[\s\S]*email IS NOT NULL/);
+  assert.match(migration, /REVOKE ALL ON TABLE public\.customer_reviews FROM PUBLIC, anon, authenticated/);
+  assert.doesNotMatch(migration, /GRANT SELECT/);
 });

@@ -45,6 +45,10 @@ const pageCopy = {
       title: 'Customer FAQ | The Discovery Box',
       description: 'Find answers about damaged orders, cancellations, returns, bulk pricing, lead times, samples, and loyalty rewards.',
     },
+    reviews: {
+      title: 'Reviews & Problem Reports | The Discovery Box',
+      description: 'Leave a private review or report a problem directly to The Discovery Box team.',
+    },
     privacy: {
       title: 'Privacy Notice | The Discovery Box',
       description: 'Read how The Discovery Box uses information submitted through the website, gift assistant, and enquiry form.',
@@ -91,6 +95,10 @@ const pageCopy = {
     faq: {
       title: 'Perguntas frequentes | The Discovery Box',
       description: 'Encontre respostas sobre artigos danificados, cancelamentos, devoluções, pedidos em quantidade, prazos, amostras e fidelidade.',
+    },
+    reviews: {
+      title: 'Avaliações e relatos de problemas | The Discovery Box',
+      description: 'Deixe uma avaliação privada ou comunique um problema directamente à equipa da The Discovery Box.',
     },
     privacy: {
       title: 'Aviso de privacidade | The Discovery Box',
@@ -189,6 +197,8 @@ export function getPageMetadata(
     ({ title, description } = copy.contact);
   } else if (pathname === '/faq') {
     ({ title, description } = copy.faq);
+  } else if (pathname === '/reviews') {
+    ({ title, description } = copy.reviews);
   } else if (pathname === '/privacy') {
     ({ title, description } = copy.privacy);
   } else if (pathname === '/terms') {

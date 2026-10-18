@@ -48,6 +48,7 @@ const copy = {
     navAbout: 'About',
     navContact: 'Contact',
     navHelp: 'FAQ',
+    navReviews: 'Feedback',
     searchGifts: 'Explore gifts',
     themeLight: 'Switch to light mode',
     themeDark: 'Switch to dark mode',
@@ -202,6 +203,29 @@ const copy = {
     contactBody: 'Tell us a little about the moment and our team will get back to you.',
     faqTitle: 'Helpful answers, before you ask.',
     faqBody: 'Find practical guidance about orders, timing, returns, samples and rewards. Details for each order are confirmed by our team.',
+    reviewsTitle: 'Share feedback or report a problem.',
+    reviewsBody: 'Choose whether to share feedback about your experience or report a problem. Submissions are stored privately and sent to our team by email; they are not published on the website.',
+    feedbackType: 'What would you like to do?',
+    leaveReview: 'Leave a review',
+    reportProblem: 'Report a problem',
+    problemEmail: 'Email address (for follow-up)',
+    orderReference: 'Order or enquiry reference (optional)',
+    problemText: 'Tell us what happened',
+    problemTextHint: 'Describe the issue and any details that may help our team',
+    reviewConsentProblem: 'I agree that this report, my email address and my optional name and order reference can be stored and emailed to The Discovery Box team so they can follow up.',
+    problemSent: 'Thank you. Your report has been saved and sent privately to our team.',
+    problemSavedEmailError: 'Your report has been saved, but our team could not be notified by email. Please contact us directly so we can follow up.',
+    reviewRating: 'Your rating',
+    reviewRatingOption: (rating: number) => `${rating} ${rating === 1 ? 'star' : 'stars'}`,
+    reviewText: 'Your review',
+    reviewTextHint: 'Tell us about your experience',
+    reviewName: 'Name (optional)',
+    reviewConsent: 'I agree that this review and my optional name can be stored and emailed to The Discovery Box team for feedback purposes.',
+    reviewSubmit: 'Send review',
+    reviewSending: 'Sending…',
+    reviewSent: 'Thank you for sharing your feedback. Your review has been saved and sent privately to our team.',
+    reviewSavedEmailError: 'Your review has been saved, but our team could not be notified by email. Please contact us directly if you need a response.',
+    reviewError: 'We could not save your review. Please try again later.',
     faqQuestions: [
       {
         question: 'What should I do if my order arrives damaged, incorrect or incomplete?',
@@ -233,6 +257,7 @@ const copy = {
       },
     ],
     faqContact: 'Still have a question? Contact our team.',
+    faqReportProblem: 'Need to share feedback or report a problem?',
     instagramTitle: 'Follow the little discoveries.',
     instagramBody: 'Scan the code to find us on Instagram, share your Discovery Moment and tag @the_discoverybox.',
     instagramScan: 'Scan to follow',
@@ -245,14 +270,14 @@ const copy = {
       {
         title: 'Information you provide',
         paragraphs: [
-          'If you send a gift enquiry, the form asks for your name, email address, an optional phone number, and details for the gift brief. The brief may include the occasion, recipient, budget, preferences, a gift-card message, and products you select.',
+          'If you send a gift enquiry, the form asks for your name, email address, an optional phone number, and details for the gift brief. The brief may include the occasion, recipient, budget, preferences, a gift-card message, and products you select. If you leave a review, your rating and written feedback, plus an optional name, are stored in our database and emailed to our team. If you report a problem, the report and required email address, plus any optional name or order reference, are stored and emailed so the team can follow up. Reviews and problem reports are private and are not published on the website.',
           'If you use the assistant, the messages you send are processed to generate replies. Please do not include sensitive personal information, passwords, payment details, identity numbers, health information, or private photographs in chat or other free-text fields.',
         ],
       },
       {
         title: 'How information is used and shared',
         paragraphs: [
-          'Enquiry details are used to respond to your request and are sent to the configured email service so the team can receive it. The name, email, and phone fields are not included with gift-recommendation or image-generation requests. However, anything you type into chat or free-text brief fields is sent as part of that text to the AI provider used for that feature, so do not enter personal or sensitive details there.',
+          'Enquiry details are used to respond to your request and are sent to the configured email service so the team can receive it. Review and problem report submissions are stored in the storefront database and sent to the team through the configured email service. The name, email, and phone fields are not included with gift-recommendation or image-generation requests. However, anything you type into chat or free-text brief fields is sent as part of that text to the AI provider used for that feature, so do not enter personal or sensitive details there.',
           'When you ask for gift recommendations, the occasion, recipient, budget, and preferences are sent to Ollama to match your brief against the public catalogue. Chat messages are also sent to Ollama to generate assistant replies.',
           'If you request an illustrative concept image, the occasion, recipient, budget, preferences, and names of selected public products are sent to Google Gemini to generate it. The image is an illustration, not a representation of a confirmed product.',
         ],
@@ -336,6 +361,7 @@ const copy = {
     navAbout: 'Sobre nós',
     navContact: 'Contacto',
     navHelp: 'Perguntas frequentes',
+    navReviews: 'Opinião',
     searchGifts: 'Explorar presentes',
     themeLight: 'Mudar para o modo claro',
     themeDark: 'Mudar para o modo escuro',
@@ -490,6 +516,29 @@ const copy = {
     contactBody: 'Diga-nos um pouco sobre a ocasião e a nossa equipa entrará em contacto.',
     faqTitle: 'Respostas úteis às suas dúvidas.',
     faqBody: 'Encontre orientações práticas sobre pedidos, prazos, devoluções, amostras e recompensas. A nossa equipa confirma os detalhes de cada pedido.',
+    reviewsTitle: 'Partilhe a sua opinião ou comunique um problema.',
+    reviewsBody: 'Escolha se pretende partilhar a sua opinião ou comunicar um problema. Os envios são guardados em privado e enviados por email à equipa; não são publicados no website.',
+    feedbackType: 'O que pretende fazer?',
+    leaveReview: 'Deixar uma avaliação',
+    reportProblem: 'Comunicar um problema',
+    problemEmail: 'Endereço de email (para contacto)',
+    orderReference: 'Referência do pedido ou contacto (opcional)',
+    problemText: 'Conte-nos o que aconteceu',
+    problemTextHint: 'Descreva o problema e os detalhes que possam ajudar a equipa',
+    reviewConsentProblem: 'Concordo que este relato, o meu endereço de email e o meu nome e referência de pedido opcionais sejam guardados e enviados por email à equipa da The Discovery Box para acompanhamento.',
+    problemSent: 'Obrigado. O seu relato foi guardado e enviado em privado à nossa equipa.',
+    problemSavedEmailError: 'O seu relato foi guardado, mas não foi possível avisar a equipa por email. Contacte-nos directamente para podermos dar seguimento.',
+    reviewRating: 'A sua classificação',
+    reviewRatingOption: (rating: number) => `${rating} ${rating === 1 ? 'estrela' : 'estrelas'}`,
+    reviewText: 'A sua avaliação',
+    reviewTextHint: 'Conte-nos sobre a sua experiência',
+    reviewName: 'Nome (opcional)',
+    reviewConsent: 'Concordo que esta avaliação e o meu nome opcional sejam guardados e enviados por email à equipa da The Discovery Box para fins de opinião.',
+    reviewSubmit: 'Enviar avaliação',
+    reviewSending: 'A enviar…',
+    reviewSent: 'Obrigado por partilhar a sua opinião. A avaliação foi guardada e enviada em privado à nossa equipa.',
+    reviewSavedEmailError: 'A sua avaliação foi guardada, mas não foi possível avisar a equipa por email. Contacte-nos directamente se precisar de uma resposta.',
+    reviewError: 'Não foi possível guardar a sua avaliação. Tente novamente mais tarde.',
     faqQuestions: [
       {
         question: 'O que devo fazer se o pedido chegar danificado, incorreto ou incompleto?',
@@ -521,6 +570,7 @@ const copy = {
       },
     ],
     faqContact: 'Ainda tem dúvidas? Contacte a nossa equipa.',
+    faqReportProblem: 'Pretende partilhar a sua opinião ou comunicar um problema?',
     instagramTitle: 'Acompanhe pequenas descobertas.',
     instagramBody: 'Leia o código para nos encontrar no Instagram, partilhe o seu momento Discovery e identifique @the_discoverybox.',
     instagramScan: 'Leia para seguir',
@@ -533,14 +583,14 @@ const copy = {
       {
         title: 'Informações fornecidas por si',
         paragraphs: [
-          'Se enviar um pedido de presente, o formulário solicita o seu nome, endereço de email, número de telefone opcional e detalhes sobre a ideia de presente. Estes podem incluir a ocasião, o destinatário, o orçamento, as preferências, uma mensagem para o cartão e os produtos selecionados.',
+          'Se enviar um pedido de presente, o formulário solicita o seu nome, endereço de email, número de telefone opcional e detalhes sobre a ideia de presente. Estes podem incluir a ocasião, o destinatário, o orçamento, as preferências, uma mensagem para o cartão e os produtos selecionados. Se deixar uma avaliação, a classificação e o texto, juntamente com o nome opcional, são guardados na nossa base de dados e enviados por email à equipa. Se comunicar um problema, o relato e o endereço de email obrigatório, juntamente com o nome ou a referência do pedido opcionais, são guardados e enviados para que a equipa possa responder. As avaliações e os relatos são privados e não são publicados no website.',
           'Se utilizar o assistente, as mensagens que enviar são processadas para gerar respostas. Não inclua no chat nem noutros campos de texto livre informações pessoais sensíveis, palavras-passe, dados de pagamento, números de identificação, informações de saúde ou fotografias privadas.',
         ],
       },
       {
         title: 'Como as informações são utilizadas e partilhadas',
         paragraphs: [
-          'Os dados do pedido são utilizados para responder e enviados ao serviço de email configurado para que a equipa os receba. Os campos de nome, email e telefone não são incluídos nos pedidos de recomendações ou de criação de imagens. No entanto, tudo o que escrever no chat ou nos campos de texto livre é enviado, como parte desse texto, ao fornecedor de IA utilizado nessa funcionalidade. Por isso, não introduza aí dados pessoais ou sensíveis.',
+          'Os dados do pedido são utilizados para responder e enviados ao serviço de email configurado para que a equipa os receba. As avaliações e os relatos de problemas são guardados na base de dados da loja e enviados à equipa através do serviço de email configurado. Os campos de nome, email e telefone não são incluídos nos pedidos de recomendações ou de criação de imagens. No entanto, tudo o que escrever no chat ou nos campos de texto livre é enviado, como parte desse texto, ao fornecedor de IA utilizado nessa funcionalidade. Por isso, não introduza aí dados pessoais ou sensíveis.',
           'Quando pede recomendações, a ocasião, o destinatário, o orçamento e as preferências são enviados à Ollama para comparar a sua ideia com o catálogo público. As mensagens do chat também são enviadas à Ollama para gerar respostas do assistente.',
           'Se pedir uma imagem conceptual ilustrativa, a ocasião, o destinatário, o orçamento, as preferências e os nomes dos produtos públicos selecionados são enviados à Google Gemini para a criar. A imagem é uma ilustração e não representa um produto confirmado.',
         ],
@@ -1323,9 +1373,12 @@ function App() {
           ))}
         </div>
         <p className="faq-contact">{t.faqContact} <a href="/contact">{t.navContact}</a>.</p>
+        <p className="faq-terms-link">{t.faqReportProblem} <a href="/reviews">{t.navReviews}</a>.</p>
         <p className="faq-terms-link"><a href="/terms">{t.terms}</a></p>
       </section>
     );
+  } else if (path === '/reviews') {
+    page = <CustomerReviews language={language} t={t} />;
   } else if (path === '/privacy') {
     page = (
       <section className="section content-page policy-page">
@@ -1373,7 +1426,6 @@ function App() {
           <a className={path === '/corporate' ? 'nav-active' : undefined} href="/corporate" aria-current={path === '/corporate' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>{t.navCorporate}</a>
           <a className={path === '/about' ? 'nav-active' : undefined} href="/about" aria-current={path === '/about' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>{t.navAbout}</a>
           <a className={path === '/contact' ? 'nav-active' : undefined} href="/contact" aria-current={path === '/contact' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>{t.navContact}</a>
-          <a className={path === '/faq' ? 'nav-active' : undefined} href="/faq" aria-current={path === '/faq' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>{t.navHelp}</a>
         </nav>
         <div className="header-actions">
           <button
@@ -1407,7 +1459,7 @@ function App() {
       <main>{page}</main>
       <footer className="site-footer">
         <div className="footer-top"><a className="brand brand-footer" href="/"><img src="/official-logo.png" alt="The Discovery Box" /></a><span className="footer-description">{t.footer}</span></div>
-        <div className="footer-bottom"><span>© {new Date().getFullYear()} The Discovery Box</span><div><a href="/faq">{t.navHelp}</a><a href="/privacy">{t.privacy}</a><a href="/terms">{t.terms}</a><a href="/contact">{t.navContact}</a></div></div>
+        <div className="footer-bottom"><span>© {new Date().getFullYear()} The Discovery Box</span><div><a href="/faq">{t.navHelp}</a><a href="/reviews">{t.navReviews}</a><a href="/privacy">{t.privacy}</a><a href="/terms">{t.terms}</a><a href="/contact">{t.navContact}</a></div></div>
       </footer>
     </div>
     <AssistantWidget
@@ -1419,6 +1471,105 @@ function App() {
       }}
     />
     </>
+  );
+}
+
+function CustomerReviews({ language, t }: { language: Language; t: typeof copy[Language] }) {
+  const [submissionType, setSubmissionType] = useState<'review' | 'problem'>('review');
+  const [rating, setRating] = useState(5);
+  const [review, setReview] = useState('');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [orderReference, setOrderReference] = useState('');
+  const [consent, setConsent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [saved, setSaved] = useState<boolean | null>(null);
+
+  const submitReview = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError('');
+    setBusy(true);
+    try {
+      const response = await fetch('/api/reviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          language,
+          submissionType,
+          rating: submissionType === 'review' ? rating : null,
+          review,
+          name,
+          email: submissionType === 'problem' ? email : '',
+          orderReference: submissionType === 'problem' ? orderReference : '',
+          consent,
+          website: String(new FormData(event.currentTarget).get('website') || ''),
+        }),
+      });
+      if (!response.ok) {
+        setError(t.reviewError);
+        return;
+      }
+      const result = await response.json() as { emailNotified?: boolean };
+      setSaved(result.emailNotified === true);
+    } catch {
+      setError(t.reviewError);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="section content-page reviews-page">
+      <span className="eyebrow eyebrow-coral">{t.navReviews}</span>
+      <h1>{t.reviewsTitle}</h1>
+      <p className="policy-intro">{t.reviewsBody}</p>
+      {saved !== null ? (
+        <p className={`notice${saved ? '' : ' notice-error'}`} role="status">
+          {saved
+            ? submissionType === 'review' ? t.reviewSent : t.problemSent
+            : submissionType === 'review' ? t.reviewSavedEmailError : t.problemSavedEmailError}
+        </p>
+      ) : (
+        <form className="review-form" onSubmit={submitReview}>
+          <fieldset className="feedback-type">
+            <legend>{t.feedbackType}</legend>
+            <label><input type="radio" name="submissionType" value="review" checked={submissionType === 'review'} onChange={() => setSubmissionType('review')} />{t.leaveReview}</label>
+            <label><input type="radio" name="submissionType" value="problem" checked={submissionType === 'problem'} onChange={() => setSubmissionType('problem')} />{t.reportProblem}</label>
+          </fieldset>
+          {submissionType === 'review' && <fieldset className="review-rating">
+            <legend>{t.reviewRating}</legend>
+            <div className="review-rating-options">
+              {[1, 2, 3, 4, 5].map((value) => (
+                <label key={value}>
+                  <input
+                    type="radio"
+                    name="rating"
+                    value={value}
+                    required={submissionType === 'review'}
+                    checked={rating === value}
+                    onChange={() => setRating(value)}
+                    aria-label={t.reviewRatingOption(value)}
+                  />
+                  <span aria-hidden="true">{value <= rating ? '★' : '☆'}</span>
+                </label>
+              ))}
+            </div>
+            <span className="review-rating-value">{t.reviewRatingOption(rating)}</span>
+          </fieldset>}
+          <label>{submissionType === 'review' ? t.reviewText : t.problemText}<textarea required minLength={5} maxLength={2000} value={review} onChange={(event) => setReview(event.target.value)} placeholder={submissionType === 'review' ? t.reviewTextHint : t.problemTextHint} /></label>
+          <label>{t.reviewName}<input type="text" maxLength={100} autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} /></label>
+          {submissionType === 'problem' && <>
+            <label>{t.problemEmail}<input type="email" required maxLength={254} autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
+            <label>{t.orderReference}<input type="text" maxLength={120} value={orderReference} onChange={(event) => setOrderReference(event.target.value)} /></label>
+          </>}
+          <label className="honeypot" aria-hidden="true">Website<input name="website" tabIndex={-1} autoComplete="off" /></label>
+          <label className="consent-check"><input type="checkbox" required checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span>{submissionType === 'review' ? t.reviewConsent : t.reviewConsentProblem} <a href="/privacy">{t.privacy}</a></span></label>
+          {error && <p className="notice notice-error" role="alert">{error}</p>}
+          <button className="button button-primary" type="submit" disabled={busy}>{busy ? t.reviewSending : submissionType === 'review' ? t.reviewSubmit : t.reportProblem}</button>
+        </form>
+      )}
+    </section>
   );
 }
 
@@ -1670,7 +1821,6 @@ function GiftBuilder({
   return (
     <section className="section builder-page">
       <div className="builder-heading"><span className="eyebrow eyebrow-coral">{t.builderEyebrow}</span><h1>{t.builderTitle}</h1></div>
-      <EnquiryGuidance t={t} />
       <p className="builder-orientation">{t.builderOrientation}</p>
       <div className="step-track" aria-label={`${t.step} ${step} ${t.of} 3`}>
         {[1, 2, 3].map((item) => <span className={item <= step ? 'step-dot step-current' : 'step-dot'} key={item}>{item}</span>)}
@@ -1781,6 +1931,7 @@ function GiftBuilder({
           {error && step !== 3 && <p className="notice notice-error" role="alert">{error}</p>}
         </>
       )}
+      <EnquiryGuidance t={t} />
       {productDetails && <div className="product-modal-backdrop" onMouseDown={(event) => {
         if (event.target === event.currentTarget) setProductDetails(null);
       }}>

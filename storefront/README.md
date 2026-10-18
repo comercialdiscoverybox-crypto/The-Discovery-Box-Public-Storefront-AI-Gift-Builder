@@ -11,11 +11,13 @@ npm ci --include=dev
 npm run dev:storefront
 ```
 
-The storefront uses `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` to read only the `public_catalog_*` views. Do not add `SUPABASE_SECRET_KEY` to this service. Apply these migrations to the existing Supabase project in order before catalogue reads will return active products:
+The storefront uses `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` to read only the `public_catalog_*` views. Do not add `SUPABASE_SECRET_KEY` to this service. Apply the catalogue migrations to the existing Supabase project in order before catalogue reads will return active products:
 
 - [`../supabase/migrations/20261017010000_public_storefront_catalog.sql`](../supabase/migrations/20261017010000_public_storefront_catalog.sql) creates restricted public views and revokes anonymous/authenticated access to the raw catalogue tables.
 - [`../supabase/migrations/20261017030000_public_catalog_active_items.sql`](../supabase/migrations/20261017030000_public_catalog_active_items.sql) exposes active products, positive prices, and their associated collections/categories.
 - [`../supabase/migrations/20261017040000_security_invoker_catalog_views.sql`](../supabase/migrations/20261017040000_security_invoker_catalog_views.sql) makes the views honor caller privileges/RLS and grants only the public catalogue columns needed by the views.
+- [`../supabase/migrations/20261018010000_private_customer_reviews.sql`](../supabase/migrations/20261018010000_private_customer_reviews.sql) creates a private review-submissions table. Anonymous visitors can insert validated reviews but cannot read submitted reviews.
+- [`../supabase/migrations/20261018020000_customer_problem_reports.sql`](../supabase/migrations/20261018020000_customer_problem_reports.sql) extends private submissions with problem reports, a required follow-up email, and an optional order reference.
 
 The storefront follows the management catalogue's `active` status. Inactive products stay hidden; active products expose their names, descriptions, images, and positive prices publicly. Verify that active products and media are approved for public viewing before applying the active-items migration.
 
@@ -28,7 +30,7 @@ The root [`../render.yaml`](../render.yaml) defines the existing staff service a
 - `OLLAMA_API_KEY` (Ollama Cloud key; server-side only)
 - `PUBLIC_SITE_URL` (optional canonical public origin, such as `https://store.example.com`; otherwise the storefront uses the incoming request origin)
 
-Add `BREVO_API_KEY`, `BREVO_FROM_EMAIL`, and `BREVO_FROM_NAME` to enable email-only enquiries. Enquiries are delivered to `BREVO_FROM_EMAIL` (use the Discovery Box commercial inbox) as a responsive HTML email with an A5 portrait print stylesheet; replies go to the customer's submitted email address. Keep the API key server-side and verify the sender address in Brevo. Set `PUBLIC_CONTACT_EMAIL` and/or `PUBLIC_WHATSAPP_URL` on the deployed storefront service to show approved contact links on the Contact page. Email must be a valid address; WhatsApp must be a `https://wa.me/` or `https://api.whatsapp.com/` URL. Image generation is disabled by default; only after a provider budget and quota are approved, add `GEMINI_API_KEY` and set `AI_IMAGE_ENABLED=true`.
+Add `BREVO_API_KEY`, `BREVO_FROM_EMAIL`, and `BREVO_FROM_NAME` to enable gift enquiries and private customer feedback notifications. Enquiries, reviews, and problem reports are delivered to `BREVO_FROM_EMAIL` (use the Discovery Box commercial inbox); enquiry replies go to the customer's submitted email address, and problem-report notifications include the customer's email as reply-to. Feedback is stored in Supabase and emailed privately to the team; it is not displayed publicly. Apply both private feedback migrations before enabling submissions. Problem reports require a customer email and may include an order or enquiry reference. If database storage succeeds but the email provider is unavailable, the customer is told that the feedback was saved but the team could not be notified. Keep the API key server-side and verify the sender address in Brevo. Set `PUBLIC_CONTACT_EMAIL` and/or `PUBLIC_WHATSAPP_URL` on the deployed storefront service to show approved contact links on the Contact page. Email must be a valid address; WhatsApp must be a `https://wa.me/` or `https://api.whatsapp.com/` URL. Image generation is disabled by default; only after a provider budget and quota are approved, add `GEMINI_API_KEY` and set `AI_IMAGE_ENABLED=true`.
 
 Outbound requests to Supabase, Ollama, Brevo, and Google Gemini log a start and outcome to the server terminal, including elapsed time and HTTP status where available. Logs do not include API keys, customer messages, or enquiry field values.
 
