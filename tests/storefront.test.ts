@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
+import sharp from 'sharp';
 
 process.env.NODE_ENV = 'test';
 const { app, renderPageDocument, toPublicCatalogImageUrl } = await import('../storefront/server.ts');
@@ -674,7 +675,11 @@ test('valid enquiry sends its details through Brevo to the Discovery Box inbox',
   const originalFetch = globalThis.fetch;
   const originalInfo = console.info;
   const apiLogs: string[] = [];
-  let exportedSvg = '';
+  let exportedJpeg: Buffer<ArrayBufferLike> = Buffer.alloc(0);
+  let thumbnailRequested = false;
+  const thumbnailPng = await sharp({
+    create: { width: 16, height: 16, channels: 3, background: '#ff6f78' },
+  }).png().toBuffer();
   type BrevoEmail = {
     sender: { name: string; email: string };
     to: { email: string }[];
@@ -702,6 +707,10 @@ test('valid enquiry sends its details through Brevo to the Discovery Box inbox',
         images: ['/api/storage/catalog-items/puzzle.png'],
         primary_image_index: 0,
       }]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (url === 'https://gift-enquiry-test.supabase.co/storage/v1/object/public/catalog-items/puzzle.png') {
+      thumbnailRequested = true;
+      return new Response(thumbnailPng, { status: 200, headers: { 'Content-Type': 'image/png' } });
     }
     if (url === 'https://api.brevo.com/v3/smtp/email') {
       providerRequest = {
@@ -760,10 +769,10 @@ test('valid enquiry sends its details through Brevo to the Discovery Box inbox',
     assert.doesNotMatch(exportUrl, /Ana Example|ana@example\.com/);
     const exportResponse = await originalFetch(exportUrl);
     assert.equal(exportResponse.status, 200);
-    assert.match(exportResponse.headers.get('content-type') || '', /image\/svg\+xml/);
-    assert.match(exportResponse.headers.get('content-disposition') || '', /attachment; filename="pedido-presente\.svg"/);
+    assert.match(exportResponse.headers.get('content-type') || '', /image\/jpeg/);
+    assert.match(exportResponse.headers.get('content-disposition') || '', /attachment; filename="pedido-presente\.jpg"/);
     assert.match(exportResponse.headers.get('cache-control') || '', /no-store/);
-    exportedSvg = await exportResponse.text();
+    exportedJpeg = Buffer.from(await exportResponse.arrayBuffer());
     const tamperedToken = exportUrl.replace(/(\/api\/enquiry-export\/)([A-Za-z0-9_-])/, (_match, prefix: string, firstChar: string) =>
       `${prefix}${firstChar === 'A' ? 'B' : 'A'}`);
     assert.equal((await originalFetch(tamperedToken)).status, 404);
@@ -804,17 +813,26 @@ test('valid enquiry sends its details through Brevo to the Discovery Box inbox',
   assert.match(providerRequest.body.htmlContent, /ID do produto: PUZZLE01/);
   assert.match(providerRequest.body.htmlContent, /2.{0,2}500/);
   assert.match(providerRequest.body.htmlContent, /public\/catalog-items\/puzzle\.png/);
-  assert.match(providerRequest.body.htmlContent, /Descarregar pedido como imagem/);
+  assert.match(providerRequest.body.htmlContent, /Descarregar pedido em JPEG/);
   assert.match(providerRequest.body.htmlContent, /role="presentation"/);
   assert.match(providerRequest.body.htmlContent, /&lt;script&gt;cores vivas&lt;\/script&gt;/);
   assert.doesNotMatch(providerRequest.body.htmlContent, /<script>cores vivas<\/script>/);
   assert.match(providerRequest.body.htmlContent, /Muitas felicidades!/);
   assert.match(providerRequest.body.htmlContent, /Puzzle/);
-  assert.match(exportedSvg, /Ana Example/);
-  assert.match(exportedSvg, /ana@example\.com/);
-  assert.match(exportedSvg, /PUZZLE01/);
-  assert.match(exportedSvg, /2.{0,2}500/);
-  assert.doesNotMatch(exportedSvg, /Map feature metadata|way\/123456789/);
+  assert.equal(thumbnailRequested, true);
+  assert.deepEqual(exportedJpeg.subarray(0, 2), Buffer.from([0xff, 0xd8]));
+  const jpegMetadata = await sharp(exportedJpeg).metadata();
+  assert.equal(jpegMetadata.format, 'jpeg');
+  assert.equal(jpegMetadata.width, 560);
+  assert.ok((jpegMetadata.height || 0) > 400);
+  const { data: jpegPixels } = await sharp(exportedJpeg).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  let thumbnailAccentPixels = 0;
+  for (let index = 0; index < jpegPixels.length; index += 3) {
+    if (jpegPixels[index] > 180 && jpegPixels[index + 1] < 150 && jpegPixels[index + 2] < 170) {
+      thumbnailAccentPixels += 1;
+    }
+  }
+  assert.ok(thumbnailAccentPixels > 1000);
   assert.match(providerRequest.body.subject, /Ana Example/);
   assert.ok(apiLogs.some((entry) => entry.includes('[api] Brevo send_enquiry_email: started')));
   assert.ok(apiLogs.some((entry) => entry.includes('[api] Brevo send_enquiry_email: succeeded')));

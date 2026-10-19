@@ -3,6 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import express from 'express';
+import sharp from 'sharp';
 import { createClient } from '@supabase/supabase-js';
 import { createServer as createViteServer } from 'vite';
 import { getCanonicalSearchParams, getPageMetadata, type MetadataLanguage, type PageMetadataProduct } from './pageMetadata';
@@ -141,33 +142,63 @@ function decryptEnquiryExport(token: string, secret: string): EnquiryExportData 
   }
 }
 
-function renderEnquiryExportSvg(data: EnquiryExportData): string {
+async function loadEnquiryExportImage(imageUrl: string, productId: string): Promise<string> {
+  try {
+    const image = new URL(imageUrl);
+    const storage = process.env.SUPABASE_URL?.trim();
+    if (!storage || image.protocol !== 'https:') return '';
+    const storageHost = new URL(storage).hostname;
+    if (image.hostname !== storageHost || !image.pathname.startsWith('/storage/v1/object/public/catalog-items/')) return '';
+    const response = await fetch(image, { signal: AbortSignal.timeout(5000) });
+    const contentType = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase() || '';
+    if (!response.ok || !['image/jpeg', 'image/png', 'image/webp', 'image/avif'].includes(contentType)) return '';
+    const reader = response.body?.getReader();
+    if (!reader) return '';
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > 2_000_000) {
+        await reader.cancel();
+        return '';
+      }
+      chunks.push(value);
+    }
+    const imageBuffer = Buffer.concat(chunks);
+    const metadata = await sharp(imageBuffer, { limitInputPixels: 20_000_000 }).metadata();
+    if (!metadata.format || !['jpeg', 'png', 'webp', 'avif'].includes(metadata.format)) return '';
+    return `data:image/${metadata.format === 'jpeg' ? 'jpeg' : metadata.format};base64,${imageBuffer.toString('base64')}`;
+  } catch (error) {
+    console.warn('Could not load a gift enquiry thumbnail for the image export', {
+      productId,
+      reason: error instanceof Error ? error.name : 'unknown',
+    });
+    return '';
+  }
+}
+
+async function renderEnquiryExportJpeg(data: EnquiryExportData): Promise<Buffer> {
   const isPortuguese = data.language === 'pt';
-  const title = isPortuguese ? 'Pedido de presente' : 'Gift enquiry';
-  const detailRows: Array<[string, string]> = [
-    [isPortuguese ? 'Nome' : 'Name', data.name],
-    ['Email', data.email],
-    [isPortuguese ? 'Telefone' : 'Phone', data.phone],
-    [isPortuguese ? 'Contacto preferido' : 'Preferred contact', data.preferredContact],
-    [isPortuguese ? 'Ocasião' : 'Occasion', data.occasion],
-    [isPortuguese ? 'Para' : 'For', data.recipient],
-    [isPortuguese ? 'Orçamento (MZN)' : 'Budget (MZN)', data.budget],
-    [isPortuguese ? 'Preferências' : 'Preferences', data.preferences],
-    [isPortuguese ? 'Mensagem do cartão' : 'Card message', data.cardMessage],
-    [isPortuguese ? 'Endereço completo do mapa' : 'Full map address information', data.fullAddress],
-  ];
-  const details = detailRows.filter(([, value]) => Boolean(value));
-  if (data.coordinates) {
-    details.push([isPortuguese ? 'Coordenadas' : 'Coordinates', data.coordinates]);
-  }
-  if (data.mapUrl) {
-    details.push([isPortuguese ? 'Localização no mapa' : 'Map link', data.mapUrl]);
-  }
+  const notProvided = isPortuguese ? 'Não indicado' : 'Not provided';
+  const productImages = await Promise.all(data.products.map((product) =>
+    loadEnquiryExportImage(product.imageUrl, product.id),
+  ));
   const wrap = (value: string, maxLength: number) => {
     const words = value.split(/\s+/);
     const lines: string[] = [];
     let line = '';
     for (const word of words) {
+      if (word.length > maxLength) {
+        if (line) lines.push(line);
+        for (let offset = 0; offset < word.length; offset += maxLength) {
+          const part = word.slice(offset, offset + maxLength);
+          if (part.length === maxLength && offset + maxLength < word.length) lines.push(part);
+          else line = part;
+        }
+        continue;
+      }
       const next = line ? `${line} ${word}` : word;
       if (line && next.length > maxLength) {
         lines.push(line);
@@ -179,36 +210,92 @@ function renderEnquiryExportSvg(data: EnquiryExportData): string {
     if (line) lines.push(line);
     return lines.length ? lines : [''];
   };
-  let y = 205;
-  const detailsMarkup = details.map(([label, value]) => {
-    const lines = wrap(String(value), 90);
-    const markup = `<text x="72" y="${y}" fill="#52647b" font-size="18" font-weight="700">${escapeHtml(String(label))}</text>${lines.map((line, index) =>
-      `<text x="390" y="${y + index * 27}" fill="#102b56" font-size="18">${escapeHtml(line)}</text>`,
-    ).join('')}`;
-    y += Math.max(48, lines.length * 27 + 18);
-    return markup;
-  }).join('');
-  y += 18;
-  const productCards = data.products.map((product) => {
-    const cardY = y;
-    const image = product.imageUrl
-      ? `<image href="${escapeHtml(product.imageUrl)}" x="78" y="${cardY + 16}" width="96" height="96" preserveAspectRatio="xMidYMid meet"/>`
-      : `<rect x="78" y="${cardY + 16}" width="96" height="96" rx="10" fill="#edf2f4"/>`;
-    const card = `<rect x="64" y="${cardY}" width="1072" height="128" rx="14" fill="#f5f8f7" stroke="#e2e8e7"/>${image}<text x="204" y="${cardY + 42}" fill="#102b56" font-size="20" font-weight="700">${escapeHtml(product.name)}</text><text x="204" y="${cardY + 74}" fill="#52647b" font-size="16">${escapeHtml(product.id)}</text><text x="204" y="${cardY + 104}" fill="#102b56" font-size="18" font-weight="700">${escapeHtml(product.price)}</text>`;
-    y += 142;
-    return card;
-  }).join('');
-  const height = Math.max(600, y + 60);
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="${height}" viewBox="0 0 1200 ${height}">
-<rect width="1200" height="${height}" fill="#f1f5f9"/><rect x="40" y="32" width="1120" height="${height - 64}" rx="22" fill="#ffffff" stroke="#e2e8f0"/>
-<path d="M62 32h1076a22 22 0 0 1 22 22v112H40V54a22 22 0 0 1 22-22z" fill="#102a43"/>
-<text x="72" y="80" fill="#7dd3c7" font-size="16" font-weight="700" letter-spacing="2">THE DISCOVERY BOX</text>
-<text x="72" y="122" fill="#ffffff" font-size="30" font-weight="700">${escapeHtml(title)}</text>
-<text x="72" y="180" fill="#102b56" font-size="22" font-weight="700">${escapeHtml(isPortuguese ? 'Informações do cliente' : 'Client information')}</text>
-${detailsMarkup}
-${data.products.length ? `<text x="72" y="${y - 2}" fill="#102b56" font-size="22" font-weight="700">${escapeHtml(isPortuguese ? 'Produtos selecionados' : 'Selected products')}</text>${productCards}` : ''}
-<text x="72" y="${height - 52}" fill="#64748b" font-size="14">${escapeHtml(isPortuguese ? 'Discovery Box · Pedido de presente' : 'Discovery Box · Gift enquiry')}</text>
-</svg>`;
+  const escapeXml = (value: string) => escapeHtml(value);
+  let y = 26;
+  const markup: string[] = [
+    '<rect width="560" height="100%" fill="#f1f5f9"/>',
+    '<rect x="8" y="8" width="544" height="100%" rx="12" fill="#ffffff" stroke="#e2e8f0"/>',
+    '<path d="M20 8h520a12 12 0 0 1 12 12v66H8V20A12 12 0 0 1 20 8z" fill="#102a43"/>',
+    `<text x="30" y="${y}" fill="#7dd3c7" font-family="Arial,Helvetica,sans-serif" font-size="8" font-weight="700" letter-spacing="1">${isPortuguese ? 'THE DISCOVERY BOX' : 'THE DISCOVERY BOX'}</text>`,
+    `<text x="30" y="${y + 22}" fill="#ffffff" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="700">${escapeXml(isPortuguese ? 'Novo pedido de presente' : 'New gift enquiry')}</text>`,
+    `<text x="30" y="${y + 40}" fill="#d9e8f5" font-family="Arial,Helvetica,sans-serif" font-size="9">${escapeXml(isPortuguese ? 'Um novo pedido foi enviado pela loja online.' : 'A new request was sent from the online store.')}</text>`,
+  ];
+  y = 112;
+  const addSection = (title: string, rows: Array<[string, string]>) => {
+    markup.push(`<text x="30" y="${y}" fill="#102a43" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="700">${escapeXml(title)}</text>`);
+    y += 10;
+    for (const [label, value] of rows) {
+      const labelLines = wrap(label, 22);
+      const valueLines = wrap(value, 47);
+      const lineCount = Math.max(labelLines.length, valueLines.length);
+      const rowHeight = Math.max(25, lineCount * 13 + 9);
+      labelLines.forEach((line, index) => {
+        markup.push(`<text x="42" y="${y + 10 + index * 13}" fill="#64748b" font-family="Arial,Helvetica,sans-serif" font-size="8">${escapeXml(line)}</text>`);
+      });
+      valueLines.forEach((line, index) => {
+        markup.push(`<text x="195" y="${y + 10 + index * 13}" fill="#172b4d" font-family="Arial,Helvetica,sans-serif" font-size="9">${escapeXml(line)}</text>`);
+      });
+      y += rowHeight;
+    }
+    y += 10;
+  };
+  addSection(isPortuguese ? 'Contacto' : 'Contact', [
+    [isPortuguese ? 'Nome' : 'Name', data.name],
+    ['Email', data.email],
+    [isPortuguese ? 'Telefone' : 'Phone', data.phone || notProvided],
+    [isPortuguese ? 'Contacto preferido' : 'Preferred contact', data.preferredContact],
+    [isPortuguese ? 'Idioma' : 'Language', isPortuguese ? 'Português' : 'English'],
+  ]);
+  const addressRows: Array<[string, string]> = [];
+  if (data.fullAddress) addressRows.push([isPortuguese ? 'Informações completas do endereço' : 'Full map address information', data.fullAddress]);
+  if (data.coordinates) addressRows.push([isPortuguese ? 'Coordenadas' : 'Coordinates', data.coordinates]);
+  if (data.mapUrl) addressRows.push([isPortuguese ? 'Ver marcador no mapa' : 'View pin on map', data.mapUrl]);
+  if (addressRows.length) addSection(isPortuguese ? 'Endereço de entrega' : 'Delivery address', addressRows);
+  addSection(isPortuguese ? 'Resumo do presente' : 'Gift brief', [
+    [isPortuguese ? 'Ocasião' : 'Occasion', data.occasion],
+    [isPortuguese ? 'Para' : 'For', data.recipient],
+    [isPortuguese ? 'Orçamento (MZN)' : 'Budget (MZN)', data.budget || notProvided],
+  ]);
+  addSection(isPortuguese ? 'Preferências' : 'Preferences', [
+    [isPortuguese ? 'Preferências' : 'Preferences', data.preferences || notProvided],
+  ]);
+  addSection(isPortuguese ? 'Mensagem para o cartão' : 'Card message', [
+    [isPortuguese ? 'Mensagem do cartão' : 'Gift-card message', data.cardMessage || notProvided],
+  ]);
+  markup.push(`<text x="30" y="${y}" fill="#102a43" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="700">${escapeXml(isPortuguese ? 'Seleção de produtos' : 'Product selection')}</text>`);
+  y += 10;
+  if (data.products.length === 0) {
+    markup.push(
+      `<text x="42" y="${y + 10}" fill="#64748b" font-family="Arial,Helvetica,sans-serif" font-size="8">${escapeXml(isPortuguese ? 'Produtos escolhidos' : 'Selected products')}</text>`,
+      `<text x="195" y="${y + 10}" fill="#172b4d" font-family="Arial,Helvetica,sans-serif" font-size="9">${escapeXml(isPortuguese ? 'Nenhum selecionado' : 'None selected')}</text>`,
+    );
+    y += 30;
+  } else {
+    data.products.forEach((product, index) => {
+      const cardY = y;
+      const image = productImages[index]
+        ? `<image href="${productImages[index]}" x="30" y="${cardY + 7}" width="72" height="72" preserveAspectRatio="xMidYMid meet"/>`
+        : `<rect x="30" y="${cardY + 7}" width="72" height="72" rx="8" fill="#f2f5f4"/>`;
+      markup.push(`<line x1="30" y1="${cardY}" x2="530" y2="${cardY}" stroke="#e2e8f0"/>${image}`);
+      const nameLines = wrap(product.name, 50);
+      nameLines.forEach((line, lineIndex) => {
+        markup.push(`<text x="116" y="${cardY + 20 + lineIndex * 13}" fill="#172b4d" font-family="Arial,Helvetica,sans-serif" font-size="10" font-weight="700">${escapeXml(line)}</text>`);
+      });
+      const detailsY = cardY + 20 + nameLines.length * 13;
+      markup.push(
+        `<text x="116" y="${detailsY}" fill="#64748b" font-family="Arial,Helvetica,sans-serif" font-size="8">${escapeXml(isPortuguese ? 'ID do produto' : 'Product ID')}: ${escapeXml(product.id)}</text>`,
+        `<text x="116" y="${detailsY + 14}" fill="#102b56" font-family="Arial,Helvetica,sans-serif" font-size="9" font-weight="700">${escapeXml(product.price)}</text>`,
+      );
+      y += 90;
+    });
+  }
+  const height = Math.max(400, y + 28);
+  markup.push(
+    `<line x1="8" y1="${height - 28}" x2="552" y2="${height - 28}" stroke="#e2e8f0"/>`,
+    `<text x="30" y="${height - 12}" fill="#64748b" font-family="Arial,Helvetica,sans-serif" font-size="7">${escapeXml(isPortuguese ? 'A equipa responderá diretamente por email para dar seguimento ao pedido.' : 'The team will reply directly by email to follow up on this enquiry.')}</text>`,
+  );
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="560" height="${height}" viewBox="0 0 560 ${height}">${markup.join('')}</svg>`;
+  return sharp(Buffer.from(svg)).flatten({ background: '#f1f5f9' }).jpeg({ quality: 90, mozjpeg: true }).toBuffer();
 }
 
 function isEnquiryAddress(value: unknown): boolean {
@@ -1308,20 +1395,27 @@ app.post('/api/gift-recommendations', rateLimit(8, 15 * 60 * 1000), async (req, 
   }
 });
 
-app.get('/api/enquiry-export/:token', (req, res) => {
+app.get('/api/enquiry-export/:token', async (req, res) => {
   const secret = process.env.BREVO_API_KEY?.trim();
   const data = secret ? decryptEnquiryExport(req.params.token, secret) : null;
   if (!data) {
     res.status(404).type('text').send('This enquiry image link is invalid or has expired.');
     return;
   }
-  const filename = data.language === 'pt' ? 'pedido-presente.svg' : 'gift-enquiry.svg';
-  res.set({
-    'Cache-Control': 'private, no-store, max-age=0',
-    'Content-Disposition': `attachment; filename="${filename}"`,
-    'Content-Security-Policy': "default-src 'none'; img-src https: http: data:; style-src 'unsafe-inline'",
-    'Referrer-Policy': 'no-referrer',
-  }).type('image/svg+xml').send(renderEnquiryExportSvg(data));
+  try {
+    const jpeg = await renderEnquiryExportJpeg(data);
+    const filename = data.language === 'pt' ? 'pedido-presente.jpg' : 'gift-enquiry.jpg';
+    res.set({
+      'Cache-Control': 'private, no-store, max-age=0',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Referrer-Policy': 'no-referrer',
+    }).type('image/jpeg').send(jpeg);
+  } catch (error) {
+    console.error('Gift enquiry image export could not be rendered', {
+      errorName: error instanceof Error ? error.name : 'unknown',
+    });
+    res.status(500).type('text').send('The enquiry image could not be generated.');
+  }
 });
 
 app.post('/api/enquiries', rateLimit(5, 15 * 60 * 1000), async (req, res) => {
@@ -1577,7 +1671,7 @@ app.post('/api/enquiries', rateLimit(5, 15 * 60 * 1000), async (req, res) => {
     products: selectedProductCards.map(({ export: product }) => product),
   }, apiKey);
   const exportUrl = `${requestOrigin(req)}/api/enquiry-export/${exportToken}`;
-  const exportButton = `<tr><td style="padding:4px 24px 24px;text-align:center;"><a href="${escapeHtml(exportUrl)}" style="display:inline-block;padding:13px 22px;border-radius:8px;background:#0f9f94;color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;">${isPortuguese ? 'Descarregar pedido como imagem' : 'Download enquiry as image'}</a></td></tr>`;
+  const exportButton = `<tr><td style="padding:4px 24px 24px;text-align:center;"><a href="${escapeHtml(exportUrl)}" style="display:inline-block;padding:13px 22px;border-radius:8px;background:#0f9f94;color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;">${isPortuguese ? 'Descarregar pedido em JPEG' : 'Download enquiry as JPEG'}</a></td></tr>`;
   const html = `<!doctype html>
 <html lang="${isPortuguese ? 'pt' : 'en'}">
 <head>
