@@ -626,10 +626,55 @@ test('valid enquiry reports missing email configuration without claiming success
   assert.match((await response.json()).error, /not configured/i);
 });
 
+test('gift enquiry requires a reachable phone for phone contact and validates map coordinates', async () => {
+  const baseEnquiry = {
+    name: 'Visitor',
+    email: 'visitor@example.com',
+    language: 'en',
+    occasion: 'Birthday',
+    recipient: 'Friend',
+    consent: true,
+  };
+  const invalidEnquiries = [
+    { ...baseEnquiry, preferredContact: 'phone' },
+    {
+      ...baseEnquiry,
+      preferredContact: 'email',
+      address: {
+        placeName: '',
+        road: '',
+        houseNumber: '',
+        neighbourhood: '',
+        district: '',
+        city: '',
+        province: '',
+        postalCode: '',
+        country: '',
+        formattedAddress: '',
+        latitude: 91,
+        longitude: 0,
+      },
+    },
+  ];
+
+  for (const [index, enquiry] of invalidEnquiries.entries()) {
+    const response = await fetch(`${baseUrl}/api/enquiries`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Forwarded-For': `198.51.100.${index + 1}`,
+      },
+      body: JSON.stringify(enquiry),
+    });
+    assert.equal(response.status, 400);
+  }
+});
+
 test('valid enquiry sends its details through Brevo to the Discovery Box inbox', async () => {
   const originalFetch = globalThis.fetch;
   const originalInfo = console.info;
   const apiLogs: string[] = [];
+  let exportedSvg = '';
   type BrevoEmail = {
     sender: { name: string; email: string };
     to: { email: string }[];
@@ -641,13 +686,26 @@ test('valid enquiry sends its details through Brevo to the Discovery Box inbox',
   process.env.BREVO_API_KEY = 'test-brevo-key';
   process.env.BREVO_FROM_EMAIL = 'comercial.discoverybox@gmail.com';
   process.env.BREVO_FROM_NAME = 'The Discovery Box';
+  process.env.SUPABASE_URL = 'https://gift-enquiry-test.supabase.co';
+  process.env.SUPABASE_PUBLISHABLE_KEY = 'test-public-key';
   console.info = (...data: Parameters<typeof console.info>) => {
     apiLogs.push(data.map((entry) => typeof entry === 'string' ? entry : JSON.stringify(entry)).join(' '));
   };
   globalThis.fetch = async (input, init) => {
-    if (String(input) === 'https://api.brevo.com/v3/smtp/email') {
+    const url = String(input);
+    if (url.includes('/rest/v1/public_catalog_items')) {
+      return new Response(JSON.stringify([{
+        id: 'PUZZLE01',
+        name_en: 'Puzzle',
+        name_pt: 'Puzzle',
+        price_mzn: 2500,
+        images: ['/api/storage/catalog-items/puzzle.png'],
+        primary_image_index: 0,
+      }]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (url === 'https://api.brevo.com/v3/smtp/email') {
       providerRequest = {
-        url: String(input),
+        url,
         apiKey: new Headers(init?.headers).get('api-key'),
         body: JSON.parse(String(init?.body)) as BrevoEmail,
       };
@@ -664,24 +722,59 @@ test('valid enquiry sends its details through Brevo to the Discovery Box inbox',
         name: 'Ana Example',
         email: 'ana@example.com',
         phone: '+258 84 123 4567',
+        preferredContact: 'whatsapp',
+        address: {
+          placeName: 'Polana <img src=x>',
+          road: 'Av. Julius Nyerere',
+          houseNumber: '123',
+          neighbourhood: 'Polana Cimento',
+          district: '<script>KaMpfumo</script>',
+          city: 'Maputo',
+          province: 'Maputo',
+          postalCode: '',
+          country: 'Mozambique',
+          formattedAddress: '123 Av. Julius Nyerere, <script>KaMpfumo</script>',
+          latitude: -25.9692,
+          longitude: 32.5732,
+          osmType: 'way',
+          osmId: '123456789',
+          placeCategory: 'place',
+          placeType: 'neighbourhood',
+          addressType: 'suburb',
+        },
         language: 'pt',
         occasion: 'Outra ocasião: Lançamento & celebração',
         recipient: 'Outra opção: 300 participantes',
         budget: '2500',
         preferences: '<script>cores vivas</script>',
         cardMessage: 'Muitas felicidades!',
-        products: ['Puzzle'],
+        products: ['PUZZLE01'],
         consent: true,
       }),
     });
     assert.equal(response.status, 202);
     assert.deepEqual(await response.json(), { status: 'accepted' });
+    const emailHtml = providerRequest?.body.htmlContent || '';
+    const exportUrl = /href="(https?:\/\/[^"]+\/api\/enquiry-export\/[A-Za-z0-9_-]+)"/.exec(emailHtml)?.[1];
+    assert.ok(exportUrl);
+    assert.doesNotMatch(exportUrl, /Ana Example|ana@example\.com/);
+    const exportResponse = await originalFetch(exportUrl);
+    assert.equal(exportResponse.status, 200);
+    assert.match(exportResponse.headers.get('content-type') || '', /image\/svg\+xml/);
+    assert.match(exportResponse.headers.get('content-disposition') || '', /attachment; filename="pedido-presente\.svg"/);
+    assert.match(exportResponse.headers.get('cache-control') || '', /no-store/);
+    exportedSvg = await exportResponse.text();
+    const tamperedToken = exportUrl.replace(/(\/api\/enquiry-export\/)([A-Za-z0-9_-])/, (_match, prefix: string, firstChar: string) =>
+      `${prefix}${firstChar === 'A' ? 'B' : 'A'}`);
+    assert.equal((await originalFetch(tamperedToken)).status, 404);
   } finally {
     globalThis.fetch = originalFetch;
     console.info = originalInfo;
     delete process.env.BREVO_API_KEY;
     delete process.env.BREVO_FROM_EMAIL;
     delete process.env.BREVO_FROM_NAME;
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_PUBLISHABLE_KEY;
   }
 
   assert.ok(providerRequest);
@@ -700,11 +793,28 @@ test('valid enquiry sends its details through Brevo to the Discovery Box inbox',
   assert.match(providerRequest.body.htmlContent, /Resumo do presente/);
   assert.match(providerRequest.body.htmlContent, /Outra ocasião: Lançamento &amp; celebração/);
   assert.match(providerRequest.body.htmlContent, /Outra opção: 300 participantes/);
+  assert.match(providerRequest.body.htmlContent, /Contacto preferido/);
+  assert.match(providerRequest.body.htmlContent, /WhatsApp/);
+  assert.match(providerRequest.body.htmlContent, /Informações completas do endereço/);
+  assert.match(providerRequest.body.htmlContent, /123 Av\. Julius Nyerere, &lt;script&gt;KaMpfumo&lt;\/script&gt;/);
+  assert.doesNotMatch(providerRequest.body.htmlContent, /Map feature metadata|Metadados do elemento no mapa/);
+  assert.doesNotMatch(providerRequest.body.htmlContent, /Place \/ landmark|House number/);
+  assert.match(providerRequest.body.htmlContent, /-25\.969200, 32\.573200/);
+  assert.match(providerRequest.body.htmlContent, /https:\/\/www\.openstreetmap\.org\/\?mlat=-25\.9692&amp;mlon=32\.5732/);
+  assert.match(providerRequest.body.htmlContent, /ID do produto: PUZZLE01/);
+  assert.match(providerRequest.body.htmlContent, /2.{0,2}500/);
+  assert.match(providerRequest.body.htmlContent, /public\/catalog-items\/puzzle\.png/);
+  assert.match(providerRequest.body.htmlContent, /Descarregar pedido como imagem/);
   assert.match(providerRequest.body.htmlContent, /role="presentation"/);
   assert.match(providerRequest.body.htmlContent, /&lt;script&gt;cores vivas&lt;\/script&gt;/);
   assert.doesNotMatch(providerRequest.body.htmlContent, /<script>cores vivas<\/script>/);
   assert.match(providerRequest.body.htmlContent, /Muitas felicidades!/);
   assert.match(providerRequest.body.htmlContent, /Puzzle/);
+  assert.match(exportedSvg, /Ana Example/);
+  assert.match(exportedSvg, /ana@example\.com/);
+  assert.match(exportedSvg, /PUZZLE01/);
+  assert.match(exportedSvg, /2.{0,2}500/);
+  assert.doesNotMatch(exportedSvg, /Map feature metadata|way\/123456789/);
   assert.match(providerRequest.body.subject, /Ana Example/);
   assert.ok(apiLogs.some((entry) => entry.includes('[api] Brevo send_enquiry_email: started')));
   assert.ok(apiLogs.some((entry) => entry.includes('[api] Brevo send_enquiry_email: succeeded')));

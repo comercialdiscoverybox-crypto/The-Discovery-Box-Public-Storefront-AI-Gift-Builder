@@ -45,6 +45,8 @@ const labels = {
     keepChat: 'Keep chatting',
     endChat: 'End conversation',
     closeChat: 'Close chat',
+    minimizeChat: 'Minimize chat',
+    restoreChat: 'Restore chat',
     fillGiftBrief: 'Yes, fill my gift brief',
     notNow: 'Not now',
     declinedOffer: 'Not now. Please keep helping me here.',
@@ -66,6 +68,8 @@ const labels = {
     keepChat: 'Continuar a conversa',
     endChat: 'Terminar conversa',
     closeChat: 'Fechar conversa',
+    minimizeChat: 'Minimizar conversa',
+    restoreChat: 'Restaurar conversa',
     fillGiftBrief: 'Sim, preencher a descrição do presente',
     notNow: 'Agora não',
     declinedOffer: 'Agora não. Continua a ajudar-me por aqui, por favor.',
@@ -199,6 +203,7 @@ function FoxIcon() {
 
 export default function AssistantWidget({ language, onNavigate, onOpen, onApplyGiftDraft }: AssistantWidgetProps) {
   const [open, setOpen] = useState(false);
+  const [minimized, setMinimized] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
   const [pending, setPending] = useState(false);
@@ -211,7 +216,7 @@ export default function AssistantWidget({ language, onNavigate, onOpen, onApplyG
   const copy = labels[language];
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || minimized) return;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setConfirmClose((visible) => !visible);
     };
@@ -219,7 +224,7 @@ export default function AssistantWidget({ language, onNavigate, onOpen, onApplyG
     if (confirmClose) keepChatRef.current?.focus();
     else inputRef.current?.focus();
     return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [open, confirmClose]);
+  }, [open, minimized, confirmClose]);
 
   useEffect(() => {
     if (transcriptRef.current) {
@@ -316,7 +321,7 @@ export default function AssistantWidget({ language, onNavigate, onOpen, onApplyG
 
   return (
     <div className="assistant-widget">
-      {open && (
+      {open && !minimized && (
         <section className="assistant-panel" aria-labelledby="assistant-title">
           <header className="assistant-header">
             <div className="assistant-heading">
@@ -326,7 +331,10 @@ export default function AssistantWidget({ language, onNavigate, onOpen, onApplyG
                 <span><i aria-hidden="true" /> {copy.subtitle}</span>
               </div>
             </div>
-            <button className="assistant-close" type="button" aria-label={copy.closeChat} onClick={() => setConfirmClose(true)}>×</button>
+            <div className="assistant-header-actions">
+              <button className="assistant-minimize" type="button" aria-label={copy.minimizeChat} onClick={() => setMinimized(true)}>−</button>
+              <button className="assistant-close" type="button" aria-label={copy.closeChat} onClick={() => setConfirmClose(true)}>×</button>
+            </div>
           </header>
           <div className="assistant-transcript" ref={transcriptRef} aria-live="polite" aria-relevant="additions text">
             <p className="assistant-message assistant-message-bot">{copy.intro}</p>
@@ -379,19 +387,20 @@ export default function AssistantWidget({ language, onNavigate, onOpen, onApplyG
         </section>
       )}
       <button
-        className={`assistant-launcher${open ? ' assistant-launcher-open' : ''}`}
+        className={`assistant-launcher${open && !minimized ? ' assistant-launcher-open' : ''}`}
         type="button"
-        aria-label={open ? copy.closeChat : copy.open}
-        aria-expanded={open}
+        aria-label={open ? (minimized ? copy.restoreChat : copy.closeChat) : copy.open}
+        aria-expanded={open && !minimized}
         onClick={() => {
-          if (open) setConfirmClose(true);
+          if (open && minimized) setMinimized(false);
+          else if (open) setConfirmClose(true);
           else {
             onOpen();
             setOpen(true);
           }
         }}
       >
-        {open
+        {open && !minimized
           ? <span aria-hidden="true">×</span>
           : <FoxIcon />}
       </button>

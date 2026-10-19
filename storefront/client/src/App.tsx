@@ -1,11 +1,56 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import AssistantWidget from './AssistantWidget';
 import type { AssistantGiftDraft } from './assistantTypes';
+import type { MapAddress } from './MapAddressPicker';
 import { trackAnalyticsEvent } from './analytics';
 import { getCanonicalSearchParams, getPageMetadata } from '../../pageMetadata';
 
+const MapAddressPicker = lazy(() => import('./MapAddressPicker'));
+
 type Language = 'en' | 'pt';
 type Theme = 'light' | 'dark';
+type EnquiryAddress = Omit<MapAddress, 'latitude' | 'longitude'> & {
+  latitude: number | null;
+  longitude: number | null;
+};
+const emptyEnquiryAddress: EnquiryAddress = {
+  placeName: '',
+  road: '',
+  houseNumber: '',
+  neighbourhood: '',
+  district: '',
+  city: '',
+  province: '',
+  postalCode: '',
+  country: '',
+  formattedAddress: '',
+  latitude: null,
+  longitude: null,
+  osmType: '',
+  osmId: '',
+  placeCategory: '',
+  placeType: '',
+  addressType: '',
+};
+function formatEnquiryAddress(address: EnquiryAddress): string {
+  const street = [address.houseNumber, address.road].filter(Boolean).join(' ');
+  const seen = new Set<string>();
+  return [
+    address.placeName,
+    street,
+    address.neighbourhood,
+    address.district,
+    address.city,
+    address.province,
+    address.postalCode,
+    address.country,
+  ].filter((part) => {
+    const normalized = part.trim().toLocaleLowerCase();
+    if (!normalized || seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  }).join(', ');
+}
 type CatalogItem = {
   id: string;
   family: 'PLAY' | 'HOME' | 'BUSINESS';
@@ -162,8 +207,8 @@ const copy = {
     backShop: 'Back to the collection',
     builderEyebrow: 'Your idea, made personal',
     builderTitle: 'Let’s make a gift that feels just right.',
-    builderOrientation: 'Choose an occasion and recipient, review product suggestions, then check your gift idea and contact details before sending an enquiry. Your answers stay editable until you submit.',
-    reviewInstructions: 'Check your gift details and selected products below, then enter your contact details and send the enquiry.',
+    builderOrientation: 'Tell us the occasion and who the gift is for. Then choose products and add your contact details.',
+    reviewInstructions: 'Add your contact details, check your choices, and send your enquiry.',
     giftDetails: 'Gift details',
     editGiftDetails: 'Edit gift details',
     editProductChoices: 'Edit product choices',
@@ -194,12 +239,61 @@ const copy = {
     budget: 'Your comfortable budget (MZN)',
     interests: 'What do they love? What should we know?',
     interestsHint: 'Interests, favourite colours, style or anything to avoid',
+    addBudget: 'Add a budget to tailor suggestions',
+    addPreferences: 'Tell us their interests to personalize ideas',
+    addCardMessage: 'Add a personal gift-card message',
+    addPhone: 'Add a phone number so we can reach you directly',
+    addDeliveryAddress: 'Add delivery address',
+    addressDeliveryNote: 'Add an address so we can plan delivery and estimate the fee. We’ll confirm the final cost with you.',
+    addressDetailsPrompt: 'Add the details you know so we can find the delivery location.',
+    addressEntryMethod: 'Choose how to add your address',
+    addressEnterManually: 'Enter address',
+    addressUseMap: 'Use map',
+    addressEditDetails: 'Edit details',
+    addressDoneEditing: 'Done',
+    addressCoordinates: 'Pin coordinates',
+    addressNoDetails: 'No address details were returned. You can add them manually.',
+    chooseAddressOnMap: 'Open map',
+    editAddressOnMap: 'Change pin',
+    addAddressPlaceName: 'Add a place or landmark',
+    addAddressRoad: 'Add a street or road',
+    addAddressHouseNumber: 'Add a house number',
+    addAddressNeighbourhood: 'Add a neighbourhood or area',
+    addAddressDistrict: 'Add a district',
+    addAddressCity: 'Add a city or municipality',
+    addAddressProvince: 'Add a province',
+    addAddressPostalCode: 'Add a postal code',
+    addAddressCountry: 'Add a country',
+    hideOptionalField: (field: string) => `Hide ${field}`,
+    showOptionalField: (field: string) => `Add ${field}`,
+    mapLoading: 'Loading the map…',
+    mapOptIn: 'OpenStreetMap receives map requests, your IP/network details, and the selected pin coordinates to look up the address.',
     chooseProducts: 'Add products from our public collection (optional)',
     review: 'Your gift idea',
-    cardMessage: 'Gift-card message (optional)',
+    cardMessage: 'Your message',
     name: 'Your name',
     email: 'Email address',
-    phone: 'Phone (optional)',
+    phone: 'Phone number',
+    preferredContact: 'How would you prefer our team to contact you?',
+    contactByEmail: 'Email',
+    contactByPhone: 'Phone call',
+    contactByWhatsApp: 'WhatsApp',
+    deliveryAddress: 'Delivery address',
+    addressPlaceName: 'Place / landmark name',
+    addressRoad: 'Street / road',
+    addressHouseNumber: 'House number',
+    addressNeighbourhood: 'Neighbourhood / area',
+    addressDistrict: 'District',
+    addressCity: 'City / municipality',
+    addressProvince: 'Province',
+    addressPostalCode: 'Postal code',
+    addressCountry: 'Country',
+    addressPlacePlaceholder: 'Map place name, when available',
+    addressRoadPlaceholder: 'Filled from map data when available',
+    addressNeighbourhoodPlaceholder: 'e.g. Polana Cimento',
+    addressDistrictPlaceholder: 'e.g. KaMpfumo',
+    addressCityPlaceholder: 'e.g. Maputo',
+    addressProvincePlaceholder: 'e.g. Maputo',
     submit: 'Send an enquiry',
     sending: 'Sending…',
     sent: 'Thanks! Your enquiry has been sent to our team.',
@@ -207,12 +301,7 @@ const copy = {
     submitErrorNotConfigured: 'Email delivery is not configured on the server. Please contact us directly.',
     submitErrorProvider: 'Our email service could not accept your enquiry. Please try again later.',
     required: 'Please complete the required fields.',
-    privacyConsent: 'I agree that my contact details and gift brief can be used to respond to this enquiry.',
-    imageButton: 'Imagine this gift',
-    imageLoading: 'Creating an illustrative idea…',
-    imageError: 'The concept image is unavailable right now. Your gift idea is still saved in this form.',
-    imageLabel: 'Illustrative AI concept',
-    disclaimer: 'This image is an illustration, not a photo of the finished gift. Final contents, personalization, price and delivery are confirmed by The Discovery Box.',
+    privacyConsent: 'I agree that the details I provide can be used to respond to this enquiry.',
     privacy: 'Privacy',
     terms: 'Terms',
     footer: 'Thoughtful gifts, playful objects and original 3D creations made with care in Mozambique to turn everyday moments into personal discoveries.',
@@ -292,16 +381,15 @@ const copy = {
       {
         title: 'Information you provide',
         paragraphs: [
-          'If you send a gift enquiry, the form asks for your name, email address, an optional phone number, and details for the gift brief. The brief may include the occasion, recipient, budget, preferences, a gift-card message, and products you select. A separate product enquiry lets you choose products and quantities, provide your contact details, and add an optional note; these details and selected public product images are emailed to the team so they can respond. If you leave a review, your rating and written feedback, plus an optional name, are stored in our database and emailed to our team. If you report a problem, the report and required email address, plus any optional name or order reference, are stored and emailed so the team can follow up. Reviews and problem reports are private and are not published on the website.',
+          'If you send a gift enquiry, the form asks for your name, email address, an optional phone number, your preferred contact method, an optional delivery address, and details for the gift brief. The brief may include the occasion, recipient, budget, preferences, a gift-card message, and products you select. If you choose a map pin, its coordinates and map requests are sent to OpenStreetMap services to look up address details. The enquiry details are emailed to the team so they can respond. A separate product enquiry lets you choose products and quantities, provide your contact details, and add an optional note; these details and selected public product images are emailed to the team so they can respond. If you leave a review, your rating and written feedback, plus an optional name, are stored in our database and emailed to our team. If you report a problem, the report and required email address, plus any optional name or order reference, are stored and emailed so the team can follow up. Reviews and problem reports are private and are not published on the website.',
           'If you use the assistant, the messages you send are processed to generate replies. Please do not include sensitive personal information, passwords, payment details, identity numbers, health information, or private photographs in chat or other free-text fields.',
         ],
       },
       {
         title: 'How information is used and shared',
         paragraphs: [
-          'Enquiry details are used to respond to your request and are sent to the configured email service so the team can receive it. Review and problem report submissions are stored in the storefront database and sent to the team through the configured email service. The name, email, and phone fields are not included with gift-recommendation or image-generation requests. However, anything you type into chat or free-text brief fields is sent as part of that text to the AI provider used for that feature, so do not enter personal or sensitive details there.',
+          'Enquiry details, including any address and pin coordinates you choose to provide, are used to respond to your request and are sent to the configured email service so the team can receive it. If you opt to use the map, OpenStreetMap services receive requests to display map tiles and look up the coordinates you select; the map provider may also receive your IP address and ordinary request metadata. Map selection is optional, and you can enter the address manually instead. Review and problem report submissions are stored in the storefront database and sent to the team through the configured email service. The name, email, and phone fields are not included with gift-recommendation requests. However, anything you type into chat or free-text brief fields is sent as part of that text to the AI provider used for that feature, so do not enter personal or sensitive details there.',
           'When you ask for gift recommendations, the occasion, recipient, budget, and preferences are sent to Ollama to match your brief against the public catalogue. Chat messages are also sent to Ollama to generate assistant replies.',
-          'If you request an illustrative concept image, the occasion, recipient, budget, preferences, and names of selected public products are sent to Google Gemini to generate it. The image is an illustration, not a representation of a confirmed product.',
         ],
       },
       {
@@ -319,12 +407,12 @@ const copy = {
       },
     ],
     termsTitle: 'Important information',
-    termsBody: 'Product availability, contents, personalization, prices and delivery details are confirmed by The Discovery Box. Gift-builder selections and generated images are suggestions only and do not create an order or a binding offer. No online payment or order reservation is available on this website.',
+    termsBody: 'Product availability, contents, personalization, prices and delivery details are confirmed by The Discovery Box. Gift-builder selections are suggestions only and do not create an order or a binding offer. No online payment or order reservation is available on this website.',
     termsSections: [
       {
         title: 'Browsing, listings, and enquiries',
         paragraphs: [
-          'The website lets you browse the public catalogue and send an enquiry. A product listing, gift-builder selection, recommendation, or generated concept image is informational or illustrative only. It does not guarantee stock, production capacity, suitability, or availability.',
+          'The website lets you browse the public catalogue and send an enquiry. A product listing, gift-builder selection, or recommendation is informational only. It does not guarantee stock, production capacity, suitability, or availability.',
           'Prices shown are in Mozambican meticais (MZN) and may not be the final price for a customized or multi-item request. The team confirms the final specifications, price, any delivery charge, and estimated preparation time. Sending an enquiry does not place an order, reserve an item, or mean the team has accepted the request.',
         ],
       },
@@ -497,8 +585,8 @@ const copy = {
     backShop: 'Voltar à coleção',
     builderEyebrow: 'A sua ideia, feita à medida',
     builderTitle: 'Vamos criar um presente especial.',
-    builderOrientation: 'Escolha a ocasião e o destinatário, reveja as sugestões de produtos e, no final, confirme a ideia e os contactos antes de enviar o pedido. Pode editar as respostas até ao envio.',
-    reviewInstructions: 'Confirme os detalhes do presente e os produtos selecionados abaixo. Depois, indique os seus contactos e envie o pedido.',
+    builderOrientation: 'Indique a ocasião e para quem é o presente. Depois, escolha os produtos e os seus contactos.',
+    reviewInstructions: 'Indique os seus contactos, reveja as escolhas e envie o pedido.',
     giftDetails: 'Detalhes do presente',
     editGiftDetails: 'Editar detalhes do presente',
     editProductChoices: 'Editar produtos escolhidos',
@@ -529,12 +617,61 @@ const copy = {
     budget: 'Orçamento aproximado (MZN)',
     interests: 'Do que gosta? O que devemos saber?',
     interestsHint: 'Interesses, cores favoritas, estilo ou algo a evitar',
+    addBudget: 'Adicione um orçamento para personalizar as sugestões',
+    addPreferences: 'Conte-nos os interesses para personalizar as ideias',
+    addCardMessage: 'Adicione uma mensagem pessoal para o cartão',
+    addPhone: 'Adicione um número para podermos contactar diretamente',
+    addDeliveryAddress: 'Adicionar endereço de entrega',
+    addressDeliveryNote: 'Indique o endereço para planearmos a entrega e estimarmos o custo. Confirmaremos o valor final consigo.',
+    addressDetailsPrompt: 'Indique os detalhes que souber para encontrarmos o local de entrega.',
+    addressEntryMethod: 'Como pretende indicar o endereço?',
+    addressEnterManually: 'Escrever endereço',
+    addressUseMap: 'Usar mapa',
+    addressEditDetails: 'Editar detalhes',
+    addressDoneEditing: 'Concluir',
+    chooseAddressOnMap: 'Abrir mapa',
+    editAddressOnMap: 'Alterar marcador',
+    addAddressPlaceName: 'Adicionar local ou ponto de referência',
+    addAddressRoad: 'Adicionar rua ou estrada',
+    addAddressHouseNumber: 'Adicionar número da casa',
+    addAddressNeighbourhood: 'Adicionar bairro ou zona',
+    addAddressDistrict: 'Adicionar distrito',
+    addAddressCity: 'Adicionar cidade ou município',
+    addAddressProvince: 'Adicionar província',
+    addAddressPostalCode: 'Adicionar código postal',
+    addAddressCountry: 'Adicionar país',
+    hideOptionalField: (field: string) => `Ocultar ${field}`,
+    showOptionalField: (field: string) => `Adicionar ${field}`,
+    mapLoading: 'A carregar o mapa…',
+    mapOptIn: 'O OpenStreetMap recebe pedidos do mapa, os dados do seu IP/rede e as coordenadas do marcador para procurar o endereço.',
     chooseProducts: 'Adicione produtos da coleção pública (opcional)',
     review: 'A sua ideia de presente',
-    cardMessage: 'Mensagem para o cartão (opcional)',
+    cardMessage: 'A sua mensagem',
     name: 'O seu nome',
     email: 'Endereço de email',
-    phone: 'Telefone (opcional)',
+    phone: 'Telefone',
+    preferredContact: 'Como prefere que a nossa equipa entre em contacto?',
+    contactByEmail: 'Email',
+    contactByPhone: 'Chamada telefónica',
+    contactByWhatsApp: 'WhatsApp',
+    deliveryAddress: 'Endereço de entrega',
+    addressCoordinates: 'Coordenadas do marcador',
+    addressNoDetails: 'Não foram encontrados detalhes do endereço. Pode adicioná-los manualmente.',
+    addressPlaceName: 'Local / ponto de referência',
+    addressRoad: 'Rua / estrada',
+    addressHouseNumber: 'Número da casa',
+    addressNeighbourhood: 'Bairro / zona',
+    addressDistrict: 'Distrito',
+    addressCity: 'Cidade / município',
+    addressProvince: 'Província',
+    addressPostalCode: 'Código postal',
+    addressCountry: 'País',
+    addressPlacePlaceholder: 'Nome do local no mapa, se disponível',
+    addressRoadPlaceholder: 'Preenchido com dados do mapa, se disponíveis',
+    addressNeighbourhoodPlaceholder: 'ex.: Polana Cimento',
+    addressDistrictPlaceholder: 'ex.: KaMpfumo',
+    addressCityPlaceholder: 'ex.: Maputo',
+    addressProvincePlaceholder: 'ex.: Maputo',
     submit: 'Enviar pedido',
     sending: 'A enviar…',
     sent: 'Obrigado! O seu pedido foi enviado à nossa equipa.',
@@ -542,12 +679,7 @@ const copy = {
     submitErrorNotConfigured: 'O envio de emails não está configurado no servidor. Contacte-nos directamente.',
     submitErrorProvider: 'O serviço de email não conseguiu aceitar o seu pedido. Tente novamente mais tarde.',
     required: 'Preencha os campos obrigatórios.',
-    privacyConsent: 'Autorizo a utilização dos meus contactos e da descrição do presente para responder a este pedido.',
-    imageButton: 'Imaginar este presente',
-    imageLoading: 'A criar uma ideia ilustrativa…',
-    imageError: 'A imagem não está disponível. A sua ideia continua neste formulário.',
-    imageLabel: 'Conceito ilustrativo com IA',
-    disclaimer: 'Esta imagem é uma ilustração, não uma fotografia do presente final. Os conteúdos, a personalização, o preço e a entrega são confirmados pela The Discovery Box.',
+    privacyConsent: 'Autorizo a utilização dos dados que indicar para responder a este pedido.',
     privacy: 'Privacidade',
     terms: 'Termos',
     footer: 'Presentes especiais, objetos divertidos e criações 3D originais, feitos com carinho em Moçambique para transformar momentos comuns em descobertas pessoais.',
@@ -627,16 +759,15 @@ const copy = {
       {
         title: 'Informações fornecidas por si',
         paragraphs: [
-          'Se enviar um pedido de presente, o formulário solicita o seu nome, endereço de email, número de telefone opcional e detalhes sobre a ideia de presente. Estes podem incluir a ocasião, o destinatário, o orçamento, as preferências, uma mensagem para o cartão e os produtos selecionados. Num formulário separado, pode pedir informações sobre produtos, indicando as quantidades, os seus contactos e uma nota opcional; estes dados e as imagens públicas dos produtos escolhidos são enviados por email à equipa para que possa responder. Se deixar uma avaliação, a classificação e o texto, juntamente com o nome opcional, são guardados na nossa base de dados e enviados por email à equipa. Se comunicar um problema, o relato e o endereço de email obrigatório, juntamente com o nome ou a referência do pedido opcionais, são guardados e enviados para que a equipa possa responder. As avaliações e os relatos são privados e não são publicados no website.',
+          'Se enviar um pedido de presente, o formulário solicita o seu nome, endereço de email, número de telefone opcional, método de contacto preferido, endereço de entrega opcional e detalhes sobre a ideia de presente. Estes podem incluir a ocasião, o destinatário, o orçamento, as preferências, uma mensagem para o cartão e os produtos selecionados. Se escolher um marcador no mapa, as coordenadas e os pedidos do mapa são enviados aos serviços OpenStreetMap para procurar os detalhes do endereço. Os detalhes do pedido são enviados por email à equipa para que possa responder. Num formulário separado, pode pedir informações sobre produtos, indicando as quantidades, os seus contactos e uma nota opcional; estes dados e as imagens públicas dos produtos escolhidos são enviados por email à equipa para que possa responder. Se deixar uma avaliação, a classificação e o texto, juntamente com o nome opcional, são guardados na nossa base de dados e enviados por email à equipa. Se comunicar um problema, o relato e o endereço de email obrigatório, juntamente com o nome ou a referência do pedido opcionais, são guardados e enviados para que a equipa possa responder. As avaliações e os relatos são privados e não são publicados no website.',
           'Se utilizar o assistente, as mensagens que enviar são processadas para gerar respostas. Não inclua no chat nem noutros campos de texto livre informações pessoais sensíveis, palavras-passe, dados de pagamento, números de identificação, informações de saúde ou fotografias privadas.',
         ],
       },
       {
         title: 'Como as informações são utilizadas e partilhadas',
         paragraphs: [
-          'Os dados do pedido são utilizados para responder e enviados ao serviço de email configurado para que a equipa os receba. As avaliações e os relatos de problemas são guardados na base de dados da loja e enviados à equipa através do serviço de email configurado. Os campos de nome, email e telefone não são incluídos nos pedidos de recomendações ou de criação de imagens. No entanto, tudo o que escrever no chat ou nos campos de texto livre é enviado, como parte desse texto, ao fornecedor de IA utilizado nessa funcionalidade. Por isso, não introduza aí dados pessoais ou sensíveis.',
+          'Os dados do pedido, incluindo qualquer endereço e coordenadas que escolha fornecer, são utilizados para responder e enviados ao serviço de email configurado para que a equipa os receba. Se optar por utilizar o mapa, os serviços OpenStreetMap recebem pedidos para apresentar os mapas e procurar as coordenadas selecionadas; o fornecedor também poderá receber o seu endereço IP e metadados normais dos pedidos. A utilização do mapa é opcional e pode introduzir o endereço manualmente. As avaliações e os relatos de problemas são guardados na base de dados da loja e enviados à equipa através do serviço de email configurado. Os campos de nome, email e telefone não são incluídos nos pedidos de recomendações. No entanto, tudo o que escrever no chat ou nos campos de texto livre é enviado, como parte desse texto, ao fornecedor de IA utilizado nessa funcionalidade. Por isso, não introduza aí dados pessoais ou sensíveis.',
           'Quando pede recomendações, a ocasião, o destinatário, o orçamento e as preferências são enviados à Ollama para comparar a sua ideia com o catálogo público. As mensagens do chat também são enviadas à Ollama para gerar respostas do assistente.',
-          'Se pedir uma imagem conceptual ilustrativa, a ocasião, o destinatário, o orçamento, as preferências e os nomes dos produtos públicos selecionados são enviados à Google Gemini para a criar. A imagem é uma ilustração e não representa um produto confirmado.',
         ],
       },
       {
@@ -654,12 +785,12 @@ const copy = {
       },
     ],
     termsTitle: 'Informações importantes',
-    termsBody: 'A disponibilidade, os conteúdos, a personalização, os preços e a entrega são confirmados pela The Discovery Box. As seleções e imagens geradas são apenas sugestões e não constituem uma encomenda ou oferta vinculativa. Este website não permite pagamentos nem reserva de encomendas.',
+    termsBody: 'A disponibilidade, os conteúdos, a personalização, os preços e a entrega são confirmados pela The Discovery Box. As seleções do criador de presentes são apenas sugestões e não constituem uma encomenda ou oferta vinculativa. Este website não permite pagamentos nem reserva de encomendas.',
     termsSections: [
       {
         title: 'Navegação, catálogo e pedidos',
         paragraphs: [
-          'O website permite explorar o catálogo público e enviar um pedido. Uma ficha de produto, seleção no criador de presentes, recomendação ou imagem conceptual gerada é apenas informativa ou ilustrativa. Não garante stock, capacidade de produção, adequação ou disponibilidade.',
+          'O website permite explorar o catálogo público e enviar um pedido. Uma ficha de produto, seleção no criador de presentes ou recomendação é apenas informativa. Não garante stock, capacidade de produção, adequação ou disponibilidade.',
           'Os preços apresentados estão em meticais moçambicanos (MZN) e podem não corresponder ao preço final de um pedido personalizado ou de várias unidades. A equipa confirma as especificações finais, o preço, eventuais custos de entrega e o prazo estimado de preparação. O envio de um pedido não constitui uma encomenda, não reserva um artigo nem significa que a equipa o aceitou.',
         ],
       },
@@ -2004,11 +2135,17 @@ function GiftBuilder({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [preferredContact, setPreferredContact] = useState<'email' | 'phone' | 'whatsapp'>('email');
+  const [address, setAddress] = useState<EnquiryAddress>(() => ({ ...emptyEnquiryAddress }));
+  const [visibleOptionalFields, setVisibleOptionalFields] = useState<Record<string, boolean>>({});
+  const [deliveryAddressVisible, setDeliveryAddressVisible] = useState(false);
+  const [addressEntryMode, setAddressEntryMode] = useState<'manual' | 'map' | null>(null);
+  const [mapAddressEditing, setMapAddressEditing] = useState(false);
+  const [mapPickerOpen, setMapPickerOpen] = useState(false);
   const [consent, setConsent] = useState(false);
-  const [busy, setBusy] = useState<'submit' | 'image' | ''>('');
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [sent, setSent] = useState(false);
-  const [conceptImage, setConceptImage] = useState('');
   const [recommendations, setRecommendations] = useState<GiftRecommendation[] | null>(null);
   const [recommendationMessage, setRecommendationMessage] = useState('');
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
@@ -2078,6 +2215,57 @@ function GiftBuilder({
         recommendation,
       }))
       .filter((entry): entry is { item: CatalogItem; recommendation: GiftRecommendation } => Boolean(entry.item));
+  const setOptionalFieldVisible = (field: string, visible: boolean) => {
+    setVisibleOptionalFields((current) => ({ ...current, [field]: visible }));
+  };
+  const optionalField = (id: string, label: string, field: ReactNode, addLabel = t.showOptionalField(label)) => (
+    <div className="optional-field" key={id}>
+      <button
+        className="optional-field-action"
+        type="button"
+        aria-expanded={Boolean(visibleOptionalFields[id])}
+        aria-controls={`gift-builder-${id}`}
+        onClick={() => setOptionalFieldVisible(id, !visibleOptionalFields[id])}
+      >
+        {visibleOptionalFields[id] ? t.hideOptionalField(label) : addLabel}
+      </button>
+      {visibleOptionalFields[id] && <div id={`gift-builder-${id}`}>{field}</div>}
+    </div>
+  );
+  const closeMapPicker = useCallback(() => setMapPickerOpen(false), []);
+  const updateAddressField = (field: keyof EnquiryAddress, value: string) => {
+    setAddress((current) => {
+      const updated = { ...current, [field]: value };
+      updated.formattedAddress = formatEnquiryAddress(updated);
+      return updated;
+    });
+  };
+  const addressFields = (
+    <div className="address-fields-grid">
+      <label>{t.addressPlaceName}<input maxLength={180} placeholder={t.addressPlacePlaceholder} value={address.placeName} onChange={(event) => updateAddressField('placeName', event.target.value)} /></label>
+      <label>{t.addressRoad}<input maxLength={180} placeholder={t.addressRoadPlaceholder} value={address.road} onChange={(event) => updateAddressField('road', event.target.value)} /></label>
+      <label>{t.addressHouseNumber}<input maxLength={40} value={address.houseNumber} onChange={(event) => updateAddressField('houseNumber', event.target.value)} /></label>
+      <label>{t.addressNeighbourhood}<input maxLength={180} placeholder={t.addressNeighbourhoodPlaceholder} value={address.neighbourhood} onChange={(event) => updateAddressField('neighbourhood', event.target.value)} /></label>
+      <label>{t.addressDistrict}<input maxLength={180} placeholder={t.addressDistrictPlaceholder} value={address.district} onChange={(event) => updateAddressField('district', event.target.value)} /></label>
+      <label>{t.addressCity}<input maxLength={180} placeholder={t.addressCityPlaceholder} value={address.city} onChange={(event) => updateAddressField('city', event.target.value)} /></label>
+      <label>{t.addressProvince}<input maxLength={180} placeholder={t.addressProvincePlaceholder} value={address.province} onChange={(event) => updateAddressField('province', event.target.value)} /></label>
+      <label>{t.addressPostalCode}<input maxLength={30} value={address.postalCode} onChange={(event) => updateAddressField('postalCode', event.target.value)} /></label>
+      <label>{t.addressCountry}<input maxLength={100} value={address.country} onChange={(event) => updateAddressField('country', event.target.value)} /></label>
+    </div>
+  );
+  const addressDetails: Array<[string, string]> = [
+    [t.addressPlaceName, address.placeName],
+    [t.addressRoad, address.road],
+    [t.addressHouseNumber, address.houseNumber],
+    [t.addressNeighbourhood, address.neighbourhood],
+    [t.addressDistrict, address.district],
+    [t.addressCity, address.city],
+    [t.addressProvince, address.province],
+    [t.addressPostalCode, address.postalCode],
+    [t.addressCountry, address.country],
+  ];
+  const addressSummaryFields = addressDetails.filter(([, value]) => Boolean(value.trim()));
+  const hasSelectedMapAddress = address.latitude !== null && address.longitude !== null;
 
   useEffect(() => {
     if (!assistantDraft || appliedAssistantDraftRef.current === assistantDraft) return;
@@ -2172,40 +2360,23 @@ function GiftBuilder({
     setStep(step + 1);
   };
 
-  const requestImage = async () => {
-    setError('');
-    setBusy('image');
-    try {
-      const response = await fetch('/api/gift-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ language, occasion: selectedOccasion, recipient: selectedRecipient, budget, preferences, products: selectedNames }),
-      });
-      if (!response.ok) throw new Error('Image request failed');
-      const result = await response.json() as { image: string };
-      setConceptImage(result.image);
-    } catch {
-      setError(t.imageError);
-    } finally {
-      setBusy('');
-    }
-  };
-
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');
-    if (!name.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !consent) {
+    if (!name.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+      (preferredContact !== 'email' && !phone.trim()) || !consent) {
       setError(t.required);
       return;
     }
-    setBusy('submit');
+    setBusy(true);
     try {
       const response = await fetch('/api/enquiries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          language, name, email, phone, occasion: selectedOccasion, recipient: selectedRecipient,
-          budget, preferences, cardMessage, products: selectedNames,
+          language, name, email, phone, preferredContact, address,
+          occasion: selectedOccasion, recipient: selectedRecipient,
+          budget, preferences, cardMessage, products: selected,
           website: String(new FormData(event.currentTarget).get('website') || ''),
           consent,
         }),
@@ -2226,7 +2397,7 @@ function GiftBuilder({
     } catch {
       setError(t.submitError);
     } finally {
-      setBusy('');
+      setBusy(false);
     }
   };
 
@@ -2254,8 +2425,8 @@ function GiftBuilder({
               if (nextRecipient !== otherRecipientOption) setRecipientDetails('');
             }}><option value="">—</option>{recipient && !(recipientOptions as readonly string[]).includes(recipient) && <option>{recipient}</option>}{recipientOptions.map((item) => <option key={item}>{item}</option>)}</select></label>
             {recipient === otherRecipientOption && <label>{t.recipientDetailsLabel}<input type="text" maxLength={120} value={recipientDetails} onChange={(event) => setRecipientDetails(event.target.value)} placeholder={t.recipientDetailsPlaceholder} /></label>}
-            <label>{t.budget}<input type="number" min="0" max="10000000" value={budget} onChange={(event) => setBudget(event.target.value)} /></label>
-            <label>{t.interests}<textarea maxLength={1000} placeholder={t.interestsHint} value={preferences} onChange={(event) => setPreferences(event.target.value)} /></label>
+            {optionalField('budget', t.budget, <label>{t.budget}<input type="number" min="0" max="10000000" value={budget} onChange={(event) => setBudget(event.target.value)} /></label>, t.addBudget)}
+            {optionalField('preferences', t.interests, <label>{t.interests}<textarea maxLength={1000} placeholder={t.interestsHint} value={preferences} onChange={(event) => setPreferences(event.target.value)} /></label>, t.addPreferences)}
           </div>}
           {step === 2 && <div className="builder-panel">
             <h2>{t.chooseProducts}</h2>
@@ -2270,7 +2441,12 @@ function GiftBuilder({
                 {showAllProducts ? t.showSuggestedProducts : t.showAllProducts}
               </button>
             </div>
-            {recommendationsLoading && !showAllProducts && <p className="notice" role="status">{t.recommendationLoading}</p>}
+            {recommendationsLoading && !showAllProducts && (
+              <div className="recommendation-loading notice" role="status" aria-live="polite">
+                <span className="loading-spinner" aria-hidden="true" />
+                <span>{t.recommendationLoading}</span>
+              </div>
+            )}
             {catalogState === 'loading' && <p className="notice">{t.loading}</p>}
             {catalogState === 'error' && <p className="notice notice-error">{t.catalogError}</p>}
             {catalogState === 'ready' && !catalog.items.length && <p className="notice">{t.empty}</p>}
@@ -2316,26 +2492,121 @@ function GiftBuilder({
                   : <p>{t.noProductsSelected}</p>}
               </div>
             </div>
-            <label>{t.cardMessage}<textarea maxLength={500} value={cardMessage} onChange={(event) => setCardMessage(event.target.value)} /></label>
-            <div className="ai-panel">
-              <div><span className="eyebrow eyebrow-coral">{t.imageLabel}</span><p>{t.disclaimer}</p></div>
-              <button type="button" className="button button-outline" disabled={busy !== ''} onClick={requestImage}>{busy === 'image' ? t.imageLoading : t.imageButton}</button>
-              {conceptImage && <img className="concept-image" src={conceptImage} alt={t.imageLabel} />}
-            </div>
+            {optionalField('cardMessage', t.cardMessage, <label>{t.cardMessage}<textarea maxLength={500} value={cardMessage} onChange={(event) => setCardMessage(event.target.value)} /></label>, t.addCardMessage)}
             <label className="honeypot" aria-hidden="true">Website<input name="website" tabIndex={-1} autoComplete="off" /></label>
             <label>{t.name}<input autoComplete="name" maxLength={120} required value={name} onChange={(event) => setName(event.target.value)} /></label>
             <label>{t.email}<input type="email" autoComplete="email" maxLength={254} required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
-            <label>{t.phone}<input type="tel" autoComplete="tel" maxLength={40} value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
+            {preferredContact !== 'email'
+              ? <label>{t.phone}<input type="tel" autoComplete="tel" maxLength={40} required value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
+              : optionalField('phone', t.phone, <label>{t.phone}<input type="tel" autoComplete="tel" maxLength={40} value={phone} onChange={(event) => setPhone(event.target.value)} /></label>, t.addPhone)}
+            <fieldset className="preferred-contact">
+              <legend>{t.preferredContact}</legend>
+              <div className="preferred-contact-options">
+                {([
+                  ['email', t.contactByEmail],
+                  ['phone', t.contactByPhone],
+                  ['whatsapp', t.contactByWhatsApp],
+                ] as const).map(([method, label]) => (
+                  <label className={`preferred-contact-option${preferredContact === method ? ' preferred-contact-selected' : ''}`} key={method}>
+                    <input type="radio" name="preferred-contact" value={method} checked={preferredContact === method} onChange={() => {
+                      setPreferredContact(method);
+                      if (method !== 'email') setOptionalFieldVisible('phone', true);
+                    }} />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            {!deliveryAddressVisible
+              ? <div className="delivery-address-prompt">
+                <p>{t.addressDeliveryNote}</p>
+                <button className="delivery-address-action" type="button" onClick={() => setDeliveryAddressVisible(true)}>{t.addDeliveryAddress}</button>
+              </div>
+              : <fieldset className="delivery-address">
+                <legend>{t.deliveryAddress}</legend>
+                <p className="delivery-address-note">{t.addressDetailsPrompt}</p>
+                <fieldset className="address-entry-method">
+                  <legend>{t.addressEntryMethod}</legend>
+                  <div className="address-entry-options">
+                    <label className={`address-entry-option${addressEntryMode === 'manual' ? ' address-entry-selected' : ''}`}>
+                      <input type="radio" name="address-entry-method" value="manual" checked={addressEntryMode === 'manual'} onChange={() => {
+                        setAddressEntryMode('manual');
+                        setMapAddressEditing(false);
+                        setAddress((current) => ({
+                          ...current,
+                          formattedAddress: formatEnquiryAddress(current),
+                          latitude: null,
+                          longitude: null,
+                          osmType: '',
+                          osmId: '',
+                          placeCategory: '',
+                          placeType: '',
+                          addressType: '',
+                        }));
+                      }} />
+                      <span>{t.addressEnterManually}</span>
+                    </label>
+                    <label className={`address-entry-option${addressEntryMode === 'map' ? ' address-entry-selected' : ''}`}>
+                      <input type="radio" name="address-entry-method" value="map" checked={addressEntryMode === 'map'} onChange={() => {
+                        setAddressEntryMode('map');
+                        setMapAddressEditing(false);
+                        setMapPickerOpen(true);
+                      }} />
+                      <span>{t.addressUseMap}</span>
+                    </label>
+                  </div>
+                </fieldset>
+                {addressEntryMode === 'manual' && addressFields}
+                {addressEntryMode === 'map' && (
+                  <>
+                    <p className="map-privacy-note">{t.mapOptIn}</p>
+                    {!hasSelectedMapAddress
+                      ? <button className="button button-outline map-open-button" type="button" onClick={() => setMapPickerOpen(true)}>{t.chooseAddressOnMap}</button>
+                      : <section className="selected-map-address" aria-label={t.deliveryAddress}>
+                        <ul>
+                          {addressSummaryFields.length > 0
+                            ? addressSummaryFields.map(([label, value]) => <li key={label}><strong>{label}:</strong> {value}</li>)
+                            : <li>{t.addressNoDetails}</li>}
+                          <li><strong>{t.addressCoordinates}:</strong> {address.latitude?.toFixed(6)}, {address.longitude?.toFixed(6)}</li>
+                        </ul>
+                        <div className="address-summary-actions">
+                          <button className="button button-outline" type="button" onClick={() => setMapAddressEditing((editing) => !editing)}>
+                            {mapAddressEditing ? t.addressDoneEditing : t.addressEditDetails}
+                          </button>
+                          <button className="text-link" type="button" onClick={() => setMapPickerOpen(true)}>{t.editAddressOnMap}</button>
+                        </div>
+                        {mapAddressEditing && addressFields}
+                      </section>}
+                  </>
+                )}
+              </fieldset>}
+            {mapPickerOpen && (
+              <Suspense fallback={<div className="address-map-backdrop"><p className="address-map-status" role="status">{t.mapLoading}</p></div>}>
+                <MapAddressPicker
+                  language={language}
+                  onClose={closeMapPicker}
+                  initialLocation={address.latitude !== null && address.longitude !== null
+                    ? { latitude: address.latitude, longitude: address.longitude }
+                    : null}
+                  onUseAddress={(mapAddress) => {
+                    setDeliveryAddressVisible(true);
+                    setAddress({ ...mapAddress });
+                    setAddressEntryMode('map');
+                    setMapAddressEditing(false);
+                  }}
+                />
+              </Suspense>
+            )}
             <label className="consent-check"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span>{t.privacyConsent} <a href="/privacy">{t.privacy}</a></span></label>
             {error && <p className="notice notice-error" role="alert">{error}</p>}
-            <button className="button button-primary submit-button" type="submit" disabled={busy !== ''}>{busy === 'submit' ? t.sending : t.submit}<span aria-hidden="true">↗</span></button>
+            <button className="button button-primary submit-button" type="submit" disabled={busy}>{busy ? t.sending : t.submit}<span aria-hidden="true">↗</span></button>
           </form>}
           {step !== 3 && <div className="builder-controls">
             {step > 1 ? <button className="button button-outline" type="button" onClick={() => {
               recommendationRequestRef.current += 1;
               setStep(step - 1);
             }}>{t.previous}</button> : <span />}
-            <button className="button button-primary" type="button" onClick={advanceStep} disabled={busy !== ''}>
+            <button className="button button-primary" type="button" onClick={advanceStep} disabled={busy}>
               {t.next}<span aria-hidden="true">↗</span>
             </button>
           </div>}

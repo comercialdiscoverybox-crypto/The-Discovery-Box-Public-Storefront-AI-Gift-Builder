@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import path from 'node:path';
 import fs from 'node:fs';
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
 import { createServer as createViteServer } from 'vite';
@@ -80,6 +81,161 @@ function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (character) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   })[character] || character);
+}
+
+type EnquiryExportProduct = {
+  id: string;
+  name: string;
+  price: string;
+  imageUrl: string;
+};
+
+type EnquiryExportData = {
+  language: 'en' | 'pt';
+  name: string;
+  email: string;
+  phone: string;
+  preferredContact: string;
+  occasion: string;
+  recipient: string;
+  budget: string;
+  preferences: string;
+  cardMessage: string;
+  fullAddress: string;
+  coordinates: string;
+  mapUrl: string;
+  products: EnquiryExportProduct[];
+};
+
+const ENQUIRY_EXPORT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+function encryptEnquiryExport(data: EnquiryExportData, secret: string): string {
+  const iv = randomBytes(12);
+  const key = createHash('sha256').update(`storefront-enquiry-export:${secret}`).digest();
+  const cipher = createCipheriv('aes-256-gcm', key, iv);
+  const payload = Buffer.from(JSON.stringify({
+    expiresAt: Date.now() + ENQUIRY_EXPORT_TTL_MS,
+    data,
+  }));
+  const encrypted = Buffer.concat([cipher.update(payload), cipher.final()]);
+  return Buffer.concat([iv, cipher.getAuthTag(), encrypted]).toString('base64url');
+}
+
+function decryptEnquiryExport(token: string, secret: string): EnquiryExportData | null {
+  try {
+    const encryptedPayload = Buffer.from(token, 'base64url');
+    if (encryptedPayload.length < 29 || encryptedPayload.length > 32_768) return null;
+    const iv = encryptedPayload.subarray(0, 12);
+    const tag = encryptedPayload.subarray(12, 28);
+    const encrypted = encryptedPayload.subarray(28);
+    const key = createHash('sha256').update(`storefront-enquiry-export:${secret}`).digest();
+    const decipher = createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(tag);
+    const payload = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+    const parsed = JSON.parse(payload.toString()) as { expiresAt?: unknown; data?: unknown };
+    if (typeof parsed.expiresAt !== 'number' || parsed.expiresAt < Date.now() ||
+      !parsed.data || typeof parsed.data !== 'object' || Array.isArray(parsed.data)) return null;
+    return parsed.data as EnquiryExportData;
+  } catch {
+    return null;
+  }
+}
+
+function renderEnquiryExportSvg(data: EnquiryExportData): string {
+  const isPortuguese = data.language === 'pt';
+  const title = isPortuguese ? 'Pedido de presente' : 'Gift enquiry';
+  const detailRows: Array<[string, string]> = [
+    [isPortuguese ? 'Nome' : 'Name', data.name],
+    ['Email', data.email],
+    [isPortuguese ? 'Telefone' : 'Phone', data.phone],
+    [isPortuguese ? 'Contacto preferido' : 'Preferred contact', data.preferredContact],
+    [isPortuguese ? 'Ocasião' : 'Occasion', data.occasion],
+    [isPortuguese ? 'Para' : 'For', data.recipient],
+    [isPortuguese ? 'Orçamento (MZN)' : 'Budget (MZN)', data.budget],
+    [isPortuguese ? 'Preferências' : 'Preferences', data.preferences],
+    [isPortuguese ? 'Mensagem do cartão' : 'Card message', data.cardMessage],
+    [isPortuguese ? 'Endereço completo do mapa' : 'Full map address information', data.fullAddress],
+  ];
+  const details = detailRows.filter(([, value]) => Boolean(value));
+  if (data.coordinates) {
+    details.push([isPortuguese ? 'Coordenadas' : 'Coordinates', data.coordinates]);
+  }
+  if (data.mapUrl) {
+    details.push([isPortuguese ? 'Localização no mapa' : 'Map link', data.mapUrl]);
+  }
+  const wrap = (value: string, maxLength: number) => {
+    const words = value.split(/\s+/);
+    const lines: string[] = [];
+    let line = '';
+    for (const word of words) {
+      const next = line ? `${line} ${word}` : word;
+      if (line && next.length > maxLength) {
+        lines.push(line);
+        line = word;
+      } else {
+        line = next;
+      }
+    }
+    if (line) lines.push(line);
+    return lines.length ? lines : [''];
+  };
+  let y = 205;
+  const detailsMarkup = details.map(([label, value]) => {
+    const lines = wrap(String(value), 90);
+    const markup = `<text x="72" y="${y}" fill="#52647b" font-size="18" font-weight="700">${escapeHtml(String(label))}</text>${lines.map((line, index) =>
+      `<text x="390" y="${y + index * 27}" fill="#102b56" font-size="18">${escapeHtml(line)}</text>`,
+    ).join('')}`;
+    y += Math.max(48, lines.length * 27 + 18);
+    return markup;
+  }).join('');
+  y += 18;
+  const productCards = data.products.map((product) => {
+    const cardY = y;
+    const image = product.imageUrl
+      ? `<image href="${escapeHtml(product.imageUrl)}" x="78" y="${cardY + 16}" width="96" height="96" preserveAspectRatio="xMidYMid meet"/>`
+      : `<rect x="78" y="${cardY + 16}" width="96" height="96" rx="10" fill="#edf2f4"/>`;
+    const card = `<rect x="64" y="${cardY}" width="1072" height="128" rx="14" fill="#f5f8f7" stroke="#e2e8e7"/>${image}<text x="204" y="${cardY + 42}" fill="#102b56" font-size="20" font-weight="700">${escapeHtml(product.name)}</text><text x="204" y="${cardY + 74}" fill="#52647b" font-size="16">${escapeHtml(product.id)}</text><text x="204" y="${cardY + 104}" fill="#102b56" font-size="18" font-weight="700">${escapeHtml(product.price)}</text>`;
+    y += 142;
+    return card;
+  }).join('');
+  const height = Math.max(600, y + 60);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="${height}" viewBox="0 0 1200 ${height}">
+<rect width="1200" height="${height}" fill="#f1f5f9"/><rect x="40" y="32" width="1120" height="${height - 64}" rx="22" fill="#ffffff" stroke="#e2e8f0"/>
+<path d="M62 32h1076a22 22 0 0 1 22 22v112H40V54a22 22 0 0 1 22-22z" fill="#102a43"/>
+<text x="72" y="80" fill="#7dd3c7" font-size="16" font-weight="700" letter-spacing="2">THE DISCOVERY BOX</text>
+<text x="72" y="122" fill="#ffffff" font-size="30" font-weight="700">${escapeHtml(title)}</text>
+<text x="72" y="180" fill="#102b56" font-size="22" font-weight="700">${escapeHtml(isPortuguese ? 'Informações do cliente' : 'Client information')}</text>
+${detailsMarkup}
+${data.products.length ? `<text x="72" y="${y - 2}" fill="#102b56" font-size="22" font-weight="700">${escapeHtml(isPortuguese ? 'Produtos selecionados' : 'Selected products')}</text>${productCards}` : ''}
+<text x="72" y="${height - 52}" fill="#64748b" font-size="14">${escapeHtml(isPortuguese ? 'Discovery Box · Pedido de presente' : 'Discovery Box · Gift enquiry')}</text>
+</svg>`;
+}
+
+function isEnquiryAddress(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const address = value as Record<string, unknown>;
+  const fields: Array<[string, number]> = [
+    ['placeName', 180],
+    ['road', 180],
+    ['houseNumber', 40],
+    ['neighbourhood', 180],
+    ['district', 180],
+    ['city', 180],
+    ['province', 180],
+    ['postalCode', 30],
+    ['country', 100],
+    ['formattedAddress', 500],
+    ['osmType', 20],
+    ['osmId', 32],
+    ['placeCategory', 120],
+    ['placeType', 120],
+    ['addressType', 120],
+  ];
+  if (!fields.every(([key, maxLength]) => address[key] === undefined || isText(address[key], maxLength))) return false;
+  const { latitude, longitude } = address;
+  if (latitude === null && longitude === null) return true;
+  return typeof latitude === 'number' && Number.isFinite(latitude) && latitude >= -90 && latitude <= 90 &&
+    typeof longitude === 'number' && Number.isFinite(longitude) && longitude >= -180 && longitude <= 180;
 }
 
 export function renderPageDocument(
@@ -1152,8 +1308,33 @@ app.post('/api/gift-recommendations', rateLimit(8, 15 * 60 * 1000), async (req, 
   }
 });
 
+app.get('/api/enquiry-export/:token', (req, res) => {
+  const secret = process.env.BREVO_API_KEY?.trim();
+  const data = secret ? decryptEnquiryExport(req.params.token, secret) : null;
+  if (!data) {
+    res.status(404).type('text').send('This enquiry image link is invalid or has expired.');
+    return;
+  }
+  const filename = data.language === 'pt' ? 'pedido-presente.svg' : 'gift-enquiry.svg';
+  res.set({
+    'Cache-Control': 'private, no-store, max-age=0',
+    'Content-Disposition': `attachment; filename="${filename}"`,
+    'Content-Security-Policy': "default-src 'none'; img-src https: http: data:; style-src 'unsafe-inline'",
+    'Referrer-Policy': 'no-referrer',
+  }).type('image/svg+xml').send(renderEnquiryExportSvg(data));
+});
+
 app.post('/api/enquiries', rateLimit(5, 15 * 60 * 1000), async (req, res) => {
-  const { name, email, phone = '', language, occasion, recipient, budget = '', preferences = '', cardMessage = '', products = [], website = '', consent } = req.body || {};
+  const {
+    name, email, phone = '', preferredContact = 'email',
+    address = {
+      placeName: '', road: '', houseNumber: '', neighbourhood: '', district: '',
+      city: '', province: '', postalCode: '', country: '', formattedAddress: '',
+      latitude: null, longitude: null,
+    },
+    language, occasion, recipient, budget = '', preferences = '', cardMessage = '',
+    products = [], website = '', consent,
+  } = req.body || {};
   if (website) {
     res.status(400).json({ error: 'Invalid request.' });
     return;
@@ -1162,13 +1343,16 @@ app.post('/api/enquiries', rateLimit(5, 15 * 60 * 1000), async (req, res) => {
     !isText(name, 120) || !name.trim() ||
     !isText(email, 254) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
     !isText(phone, 40) ||
+    !['email', 'phone', 'whatsapp'].includes(preferredContact) ||
+    (preferredContact !== 'email' && (!phone.trim() || phone.replace(/\D/g, '').length < 5)) ||
+    !isEnquiryAddress(address) ||
     !['en', 'pt'].includes(language) ||
     !isText(occasion, 160) || !isText(recipient, 160) ||
     !isText(budget, 24) || (budget !== '' && (!/^\d+(\.\d{1,2})?$/.test(budget) || Number(budget) > 10000000)) ||
     !isText(preferences, 1000) ||
     !isText(cardMessage, 500) ||
     !Array.isArray(products) || products.length > 5 ||
-    !products.every((product: unknown) => isText(product, 120)) ||
+    !products.every((product: unknown) => isText(product, 120) && /^[A-Za-z0-9_-]+$/.test(product)) ||
     consent !== true
   ) {
     res.status(400).json({ error: 'Please check the enquiry details and try again.' });
@@ -1186,12 +1370,68 @@ app.post('/api/enquiries', rateLimit(5, 15 * 60 * 1000), async (req, res) => {
     return;
   }
 
+  type GiftEnquiryProduct = {
+    id: string;
+    name_en: string;
+    name_pt: string;
+    price_mzn: number | string | null;
+    images: string[] | null;
+    primary_image_index: number | null;
+  };
+  const selectedProducts: GiftEnquiryProduct[] = [];
+  if (products.length > 0) {
+    const supabase = getPublicSupabase();
+    if (!supabase) {
+      res.status(503).json({ error: 'The public catalogue is not configured.' });
+      return;
+    }
+    const catalogueStartedAt = Date.now();
+    logApiCall('Supabase', 'gift_enquiry_catalog_query', 'started');
+    try {
+      const { data, error } = await supabase
+        .from('public_catalog_items')
+        .select('id,name_en,name_pt,price_mzn,images,primary_image_index')
+        .in('id', products);
+      if (error) {
+        logApiCall('Supabase', 'gift_enquiry_catalog_query', 'failed', {
+          durationMs: Date.now() - catalogueStartedAt,
+          code: error.code || 'unknown',
+        });
+        console.error('Gift enquiry catalogue lookup failed', { code: error.code || null });
+        res.status(502).json({ error: 'The selected products could not be verified. Please try again.' });
+        return;
+      }
+      const productsById = new Map(((data || []) as GiftEnquiryProduct[]).map((product) => [product.id, product]));
+      if (products.some((id: string) => !productsById.has(id))) {
+        res.status(400).json({ error: 'One or more selected products are no longer available.' });
+        return;
+      }
+      selectedProducts.push(...products.map((id: string) => productsById.get(id)!));
+      logApiCall('Supabase', 'gift_enquiry_catalog_query', 'succeeded', {
+        durationMs: Date.now() - catalogueStartedAt,
+        itemCount: selectedProducts.length,
+      });
+    } catch (error) {
+      logApiCall('Supabase', 'gift_enquiry_catalog_query', 'failed', {
+        durationMs: Date.now() - catalogueStartedAt,
+        reason: 'network',
+      });
+      console.error('Gift enquiry catalogue could not be reached', {
+        errorName: error instanceof Error ? error.name : 'unknown',
+      });
+      res.status(502).json({ error: 'The selected products could not be verified. Please try again.' });
+      return;
+    }
+  }
+
   const isPortuguese = language === 'pt';
   const text = (value: string) => escapeHtml(value).replace(/\n/g, '<br>');
   const valueCell = (value: string) =>
     `<td style="padding:10px 12px;color:#172b4d;font-size:14px;line-height:1.5;word-break:break-word;">${text(value)}</td>`;
   const detailRow = (label: string, value: string) =>
     `<tr><td style="width:36%;padding:10px 12px;color:#64748b;font-size:12px;line-height:1.5;vertical-align:top;">${label}</td>${valueCell(value)}</tr>`;
+  const detailRowHtml = (label: string, valueHtml: string) =>
+    `<tr><td style="width:36%;padding:10px 12px;color:#64748b;font-size:12px;line-height:1.5;vertical-align:top;">${label}</td><td style="padding:10px 12px;color:#172b4d;font-size:14px;line-height:1.5;word-break:break-word;">${valueHtml}</td></tr>`;
   const section = (title: string, rows: string) =>
     `<tr><td style="padding:20px 24px 6px;"><h2 style="margin:0;color:#102a43;font-size:15px;line-height:1.4;">${title}</h2></td></tr>
      <tr><td style="padding:0 24px 8px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">${rows}</table></td></tr>`;
@@ -1200,8 +1440,53 @@ app.post('/api/enquiries', rateLimit(5, 15 * 60 * 1000), async (req, res) => {
     detailRow(isPortuguese ? 'Nome' : 'Name', name.trim()),
     detailRow('Email', email.trim()),
     detailRow(isPortuguese ? 'Telefone' : 'Phone', phone.trim() || notProvided),
+    detailRow(
+      isPortuguese ? 'Contacto preferido' : 'Preferred contact',
+      preferredContact === 'whatsapp'
+        ? 'WhatsApp'
+        : preferredContact === 'phone'
+          ? (isPortuguese ? 'Chamada telefónica' : 'Phone call')
+          : 'Email',
+    ),
     detailRow(isPortuguese ? 'Idioma' : 'Language', isPortuguese ? 'Português' : 'English'),
   ].join('');
+  const streetAddress = [address.houseNumber, address.road].filter(Boolean).join(' ');
+  const addressParts = [
+    address.placeName,
+    streetAddress,
+    address.neighbourhood,
+    address.district,
+    address.city,
+    address.province,
+    address.postalCode,
+    address.country,
+  ];
+  const seenAddressParts = new Set<string>();
+  const fullAddress = address.formattedAddress.trim() || addressParts.filter((part) => {
+    const normalized = part.trim().toLocaleLowerCase();
+    if (!normalized || seenAddressParts.has(normalized)) return false;
+    seenAddressParts.add(normalized);
+    return true;
+  }).join(', ');
+  const addressRows: string[] = [];
+  if (address.latitude !== null && address.longitude !== null) {
+    const coordinates = `${address.latitude.toFixed(6)}, ${address.longitude.toFixed(6)}`;
+    const mapUrl = `https://www.openstreetmap.org/?mlat=${address.latitude}&mlon=${address.longitude}#map=18/${address.latitude}/${address.longitude}`;
+    const fullAddressValue = [
+      fullAddress ? text(fullAddress) : '',
+      `<span style="color:#64748b;font-size:12px;">${isPortuguese ? 'Coordenadas' : 'Coordinates'}: ${coordinates}</span>`,
+      `<a href="${escapeHtml(mapUrl)}" style="color:#087f8c;">${isPortuguese ? 'Ver marcador no mapa' : 'View pin on map'}</a>`,
+    ].filter(Boolean).join('<br>');
+    addressRows.push(detailRowHtml(
+      isPortuguese ? 'Informações completas do endereço' : 'Full map address information',
+      fullAddressValue,
+    ));
+  } else if (fullAddress) {
+    addressRows.push(detailRow(
+      isPortuguese ? 'Informações completas do endereço' : 'Full map address information',
+      fullAddress,
+    ));
+  }
   const giftBrief = [
     detailRow(isPortuguese ? 'Ocasião' : 'Occasion', occasion),
     detailRow(isPortuguese ? 'Para' : 'For', recipient),
@@ -1215,10 +1500,84 @@ app.post('/api/enquiries', rateLimit(5, 15 * 60 * 1000), async (req, res) => {
     isPortuguese ? 'Mensagem do cartão' : 'Gift-card message',
     cardMessage.trim() || notProvided,
   );
-  const selectedProductsRow = detailRow(
-    isPortuguese ? 'Produtos escolhidos' : 'Selected products',
-    products.length ? products.join(', ') : (isPortuguese ? 'Nenhum selecionado' : 'None selected'),
-  );
+  const selectedProductCards = selectedProducts.map((item) => {
+    const productName = isPortuguese ? item.name_pt : item.name_en;
+    const numericPrice = item.price_mzn === null || item.price_mzn === '' ? null : Number(item.price_mzn);
+    const price = numericPrice !== null && Number.isFinite(numericPrice)
+      ? `${numericPrice.toLocaleString(isPortuguese ? 'pt-MZ' : 'en-US')} MZN`
+      : (isPortuguese ? 'Preço a confirmar' : 'Price to be confirmed');
+    const images = item.images || [];
+    const imageIndex = typeof item.primary_image_index === 'number' &&
+      Number.isSafeInteger(item.primary_image_index) && images.length > 0
+      ? Math.max(0, Math.min(item.primary_image_index, images.length - 1))
+      : 0;
+    const imagePath = images[imageIndex] || images[0] || '';
+    let imageMarkup = '';
+    if (imagePath) {
+      try {
+        const imageUrl = new URL(
+          toPublicCatalogImageUrl(imagePath, process.env.SUPABASE_URL?.trim() || ''),
+          requestOrigin(req),
+        );
+        if (imageUrl.protocol === 'http:' || imageUrl.protocol === 'https:') {
+          imageMarkup = `<img src="${escapeHtml(imageUrl.toString())}" width="92" height="92" alt="${text(productName)}" style="display:block;width:92px;height:92px;object-fit:contain;border-radius:10px;background:#f2f5f4;">`;
+        }
+      } catch (error) {
+        console.error('A selected gift image URL could not be resolved for the enquiry email', {
+          productId: item.id,
+          errorName: error instanceof Error ? error.name : 'unknown',
+        });
+      }
+    }
+    const row = `<tr><td style="padding:12px 0;border-bottom:1px solid #e7edf1;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;"><tr><td width="104" valign="top" style="padding-right:12px;">${imageMarkup}</td><td valign="top" style="padding:4px 0;color:#17324f;font-size:14px;line-height:1.6;"><strong>${text(productName)}</strong><br><span style="color:#64748b;font-size:12px;">${isPortuguese ? 'ID do produto' : 'Product ID'}: ${text(item.id)}</span><br><span style="font-weight:700;">${text(price)}</span></td></tr></table></td></tr>`;
+    return {
+      row,
+      export: {
+        id: item.id,
+        name: productName,
+        price,
+        imageUrl: imageMarkup ? new URL(
+          toPublicCatalogImageUrl(imagePath, process.env.SUPABASE_URL?.trim() || ''),
+          requestOrigin(req),
+        ).toString() : '',
+      },
+    };
+  });
+  const selectedProductsRow = selectedProductCards.length
+    ? `<tr><td style="padding:10px 12px;">${selectedProductCards.map(({ row }) => row).join('')}</td></tr>`
+    : detailRow(
+      isPortuguese ? 'Produtos escolhidos' : 'Selected products',
+      isPortuguese ? 'Nenhum selecionado' : 'None selected',
+    );
+  const coordinates = address.latitude !== null && address.longitude !== null
+    ? `${address.latitude.toFixed(6)}, ${address.longitude.toFixed(6)}`
+    : '';
+  const mapUrl = address.latitude !== null && address.longitude !== null
+    ? `https://www.openstreetmap.org/?mlat=${address.latitude}&mlon=${address.longitude}#map=18/${address.latitude}/${address.longitude}`
+    : '';
+  const preferredContactLabel = preferredContact === 'whatsapp'
+    ? 'WhatsApp'
+    : preferredContact === 'phone'
+      ? (isPortuguese ? 'Chamada telefónica' : 'Phone call')
+      : 'Email';
+  const exportToken = encryptEnquiryExport({
+    language,
+    name: name.trim(),
+    email: email.trim(),
+    phone: phone.trim() || notProvided,
+    preferredContact: preferredContactLabel,
+    occasion,
+    recipient,
+    budget: budget || notProvided,
+    preferences: preferences.trim() || notProvided,
+    cardMessage: cardMessage.trim() || notProvided,
+    fullAddress,
+    coordinates,
+    mapUrl,
+    products: selectedProductCards.map(({ export: product }) => product),
+  }, apiKey);
+  const exportUrl = `${requestOrigin(req)}/api/enquiry-export/${exportToken}`;
+  const exportButton = `<tr><td style="padding:4px 24px 24px;text-align:center;"><a href="${escapeHtml(exportUrl)}" style="display:inline-block;padding:13px 22px;border-radius:8px;background:#0f9f94;color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;">${isPortuguese ? 'Descarregar pedido como imagem' : 'Download enquiry as image'}</a></td></tr>`;
   const html = `<!doctype html>
 <html lang="${isPortuguese ? 'pt' : 'en'}">
 <head>
@@ -1243,12 +1602,18 @@ app.post('/api/enquiries', rateLimit(5, 15 * 60 * 1000), async (req, res) => {
       <p style="margin:8px 0 0;color:#d9e8f5;font-size:13px;line-height:1.5;">${isPortuguese ? 'Um novo pedido foi enviado pela loja online.' : 'A new request was sent from the online store.'}</p>
     </td></tr>
     ${section(isPortuguese ? 'Contacto' : 'Contact', details)}
+    ${addressRows.length ? section(isPortuguese ? 'Endereço de entrega' : 'Delivery address', addressRows.join('')) : ''}
     ${section(isPortuguese ? 'Resumo do presente' : 'Gift brief', giftBrief)}
     ${section(isPortuguese ? 'Preferências' : 'Preferences', preferencesRow)}
     ${section(isPortuguese ? 'Mensagem para o cartão' : 'Card message', messageRow)}
     ${section(isPortuguese ? 'Seleção de produtos' : 'Product selection', selectedProductsRow)}
+    ${exportButton}
     <tr><td style="padding:16px 24px 20px;border-top:1px solid #e2e8f0;color:#64748b;font-size:11px;line-height:1.5;">
-      ${isPortuguese ? 'Responda diretamente a este email para contactar o cliente.' : 'Reply directly to this email to contact the customer.'}
+      ${preferredContact === 'email'
+        ? (isPortuguese ? 'Responda diretamente a este email para contactar o cliente.' : 'Reply directly to this email to contact the customer.')
+        : preferredContact === 'whatsapp'
+          ? (isPortuguese ? `O cliente prefere WhatsApp: ${text(phone.trim())}` : `The customer prefers WhatsApp: ${text(phone.trim())}`)
+          : (isPortuguese ? `O cliente prefere uma chamada telefónica: ${text(phone.trim())}` : `The customer prefers a phone call: ${text(phone.trim())}`)}
     </td></tr>
   </table>
 </body>
