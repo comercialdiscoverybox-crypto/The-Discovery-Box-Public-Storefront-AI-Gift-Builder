@@ -33,6 +33,10 @@ const pageCopy = {
       title: 'Create a Personalized Gift | The Discovery Box',
       description: 'Tell us about the occasion, recipient, and budget. Build a thoughtful gift idea with The Discovery Box.',
     },
+    productEnquiry: {
+      title: 'Product Enquiry | The Discovery Box',
+      description: 'Ask The Discovery Box about selected products, quantities, availability, pricing, and timing.',
+    },
     about: {
       title: 'About The Discovery Box | Thoughtful Gifts from Mozambique',
       description: 'Learn how The Discovery Box brings creativity, design, 3D printing, and personalization together in Mozambique.',
@@ -83,6 +87,10 @@ const pageCopy = {
     builder: {
       title: 'Crie um presente personalizado | The Discovery Box',
       description: 'Conte-nos sobre a ocasião, o destinatário e o orçamento. Crie uma ideia de presente especial com a The Discovery Box.',
+    },
+    productEnquiry: {
+      title: 'Pedido de informação sobre produtos | The Discovery Box',
+      description: 'Pergunte à The Discovery Box sobre produtos, quantidades, disponibilidade, preços e prazos.',
     },
     about: {
       title: 'Sobre a The Discovery Box | Presentes especiais de Moçambique',
@@ -191,6 +199,9 @@ export function getPageMetadata(
     ({ title, description } = copy.corporate);
   } else if (pathname === '/gift-builder') {
     ({ title, description } = copy.builder);
+  } else if (pathname === '/product-enquiry') {
+    ({ title, description } = copy.productEnquiry);
+    robots = 'noindex,follow';
   } else if (pathname === '/about') {
     ({ title, description } = copy.about);
   } else if (pathname === '/contact') {

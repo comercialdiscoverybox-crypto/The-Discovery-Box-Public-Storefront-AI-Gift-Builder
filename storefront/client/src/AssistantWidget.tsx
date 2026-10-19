@@ -78,13 +78,13 @@ function internalPath(href: string): string | null {
   if (!href.startsWith('/') || href.startsWith('//') || href.includes('\\')) return null;
   const destination = new URL(href, window.location.origin);
   if (destination.origin !== window.location.origin) return null;
-  const allowedPath = new Set(['/shop', '/contact', '/gift-builder', '/corporate', '/about', '/faq', '/reviews', '/privacy', '/terms']);
+  const allowedPath = new Set(['/shop', '/contact', '/gift-builder', '/product-enquiry', '/corporate', '/about', '/faq', '/reviews', '/privacy', '/terms']);
   if (!allowedPath.has(destination.pathname) && !/^\/product\/[A-Za-z0-9_-]+$/.test(destination.pathname)) return null;
   return `${destination.pathname}${destination.search}${destination.hash}`;
 }
 
 function renderInlineFormatting(text: string, keyPrefix: string, onNavigate: (url: string) => void): ReactNode[] {
-  const formatting = /(\[[^\]\n]+\]\(\/(?:shop|contact|gift-builder|corporate|about|faq|reviews|privacy|terms|product\/[A-Za-z0-9_-]+)(?:\?[^\s)]*)?\)|\*\*[^*\n]+?\*\*|__[^_\n]+?__|\*[^*\n]+?\*|_[^_\n]+?_|`[^`\n]+`)/g;
+  const formatting = /(\[[^\]\n]+\]\(\/(?:shop|contact|gift-builder|product-enquiry|corporate|about|faq|reviews|privacy|terms|product\/[A-Za-z0-9_-]+)(?:\?[^\s)]*)?\)|\*\*[^*\n]+?\*\*|__[^_\n]+?__|\*[^*\n]+?\*|_[^_\n]+?_|`[^`\n]+`)/g;
   const parts: ReactNode[] = [];
   let lastIndex = 0;
   let partIndex = 0;

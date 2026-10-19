@@ -133,10 +133,31 @@ const copy = {
     loading: 'Finding thoughtful things…',
     loadingHint: 'Getting everything ready for you',
     requestQuote: 'Ask about this gift',
-    buildWith: 'Build a gift around this',
+    buildWith: 'Enquire about this product',
+    productEnquiryTitle: 'Enquire about selected products',
+    productEnquiryIntro: 'Tell us how to reach you, choose the products and quantities, and our team will confirm availability, pricing and timing. Sending an enquiry does not place an order.',
+    productEnquiryBack: 'Back to product',
+    productEnquiryProducts: 'Products in your enquiry',
+    productEnquiryAddProduct: 'Add another product',
+    productEnquiryAddButton: 'Add product',
+    productEnquiryChooseProduct: 'Choose a product',
+    productEnquiryQuantity: 'Quantity',
+    productEnquiryRemoveProduct: 'Remove product',
+    productEnquiryMessage: 'Question or customization note (optional)',
+    productEnquiryConsent: 'I agree that my contact details and product enquiry can be used to respond to me.',
+    productEnquirySubmit: 'Send product enquiry',
+    productEnquirySent: 'Thanks! Your product enquiry has been sent to our team.',
+    productEnquiryNoProducts: 'Choose at least one product to continue.',
+    productEnquiryAddLimit: 'You can include up to 10 products in one enquiry.',
+    productEnquiryUnavailableProduct: 'This product is no longer available. Remove it and choose another.',
+    productEnquiryError: 'We could not send your enquiry. Please try again later.',
+    productEnquiryUnavailable: 'Email delivery is not configured on the server. Please contact us directly.',
     imageNumber: (current: number, total: number) => `Image ${current} of ${total}`,
     previousImage: 'Show previous product image',
     nextImage: 'Show next product image',
+    viewImageFullscreen: 'View image full screen',
+    exitImageFullscreen: 'Exit full screen',
+    fullscreenUnavailable: 'Full-screen view is unavailable in this browser.',
     noPrice: 'Request a quote',
     backShop: 'Back to the collection',
     builderEyebrow: 'Your idea, made personal',
@@ -271,7 +292,7 @@ const copy = {
       {
         title: 'Information you provide',
         paragraphs: [
-          'If you send a gift enquiry, the form asks for your name, email address, an optional phone number, and details for the gift brief. The brief may include the occasion, recipient, budget, preferences, a gift-card message, and products you select. If you leave a review, your rating and written feedback, plus an optional name, are stored in our database and emailed to our team. If you report a problem, the report and required email address, plus any optional name or order reference, are stored and emailed so the team can follow up. Reviews and problem reports are private and are not published on the website.',
+          'If you send a gift enquiry, the form asks for your name, email address, an optional phone number, and details for the gift brief. The brief may include the occasion, recipient, budget, preferences, a gift-card message, and products you select. A separate product enquiry lets you choose products and quantities, provide your contact details, and add an optional note; these details and selected public product images are emailed to the team so they can respond. If you leave a review, your rating and written feedback, plus an optional name, are stored in our database and emailed to our team. If you report a problem, the report and required email address, plus any optional name or order reference, are stored and emailed so the team can follow up. Reviews and problem reports are private and are not published on the website.',
           'If you use the assistant, the messages you send are processed to generate replies. Please do not include sensitive personal information, passwords, payment details, identity numbers, health information, or private photographs in chat or other free-text fields.',
         ],
       },
@@ -447,10 +468,31 @@ const copy = {
     loading: 'A encontrar presentes especiais…',
     loadingHint: 'A preparar tudo para si',
     requestQuote: 'Perguntar sobre este presente',
-    buildWith: 'Criar um presente a partir deste',
+    buildWith: 'Pedir informações sobre este produto',
+    productEnquiryTitle: 'Peça informações sobre os produtos',
+    productEnquiryIntro: 'Indique como podemos contactá-lo, escolha os produtos e as quantidades. A nossa equipa confirmará a disponibilidade, o preço e o prazo. O envio do pedido não constitui uma encomenda.',
+    productEnquiryBack: 'Voltar ao produto',
+    productEnquiryProducts: 'Produtos do seu pedido',
+    productEnquiryAddProduct: 'Adicionar outro produto',
+    productEnquiryAddButton: 'Adicionar produto',
+    productEnquiryChooseProduct: 'Escolha um produto',
+    productEnquiryQuantity: 'Quantidade',
+    productEnquiryRemoveProduct: 'Remover produto',
+    productEnquiryMessage: 'Dúvida ou nota de personalização (opcional)',
+    productEnquiryConsent: 'Autorizo a utilização dos meus contactos e do pedido de informação para me responderem.',
+    productEnquirySubmit: 'Enviar pedido de informação',
+    productEnquirySent: 'Obrigado! O seu pedido de informação foi enviado à nossa equipa.',
+    productEnquiryNoProducts: 'Escolha pelo menos um produto para continuar.',
+    productEnquiryAddLimit: 'Pode incluir até 10 produtos num pedido.',
+    productEnquiryUnavailableProduct: 'Este produto já não está disponível. Remova-o e escolha outro.',
+    productEnquiryError: 'Não foi possível enviar o seu pedido. Tente novamente mais tarde.',
+    productEnquiryUnavailable: 'O envio de emails não está configurado no servidor. Contacte-nos diretamente.',
     imageNumber: (current: number, total: number) => `Imagem ${current} de ${total}`,
     previousImage: 'Mostrar imagem anterior do produto',
     nextImage: 'Mostrar imagem seguinte do produto',
+    viewImageFullscreen: 'Ver imagem em ecrã inteiro',
+    exitImageFullscreen: 'Sair do ecrã inteiro',
+    fullscreenUnavailable: 'A visualização em ecrã inteiro não está disponível neste navegador.',
     noPrice: 'Solicitar orçamento',
     backShop: 'Voltar à coleção',
     builderEyebrow: 'A sua ideia, feita à medida',
@@ -585,7 +627,7 @@ const copy = {
       {
         title: 'Informações fornecidas por si',
         paragraphs: [
-          'Se enviar um pedido de presente, o formulário solicita o seu nome, endereço de email, número de telefone opcional e detalhes sobre a ideia de presente. Estes podem incluir a ocasião, o destinatário, o orçamento, as preferências, uma mensagem para o cartão e os produtos selecionados. Se deixar uma avaliação, a classificação e o texto, juntamente com o nome opcional, são guardados na nossa base de dados e enviados por email à equipa. Se comunicar um problema, o relato e o endereço de email obrigatório, juntamente com o nome ou a referência do pedido opcionais, são guardados e enviados para que a equipa possa responder. As avaliações e os relatos são privados e não são publicados no website.',
+          'Se enviar um pedido de presente, o formulário solicita o seu nome, endereço de email, número de telefone opcional e detalhes sobre a ideia de presente. Estes podem incluir a ocasião, o destinatário, o orçamento, as preferências, uma mensagem para o cartão e os produtos selecionados. Num formulário separado, pode pedir informações sobre produtos, indicando as quantidades, os seus contactos e uma nota opcional; estes dados e as imagens públicas dos produtos escolhidos são enviados por email à equipa para que possa responder. Se deixar uma avaliação, a classificação e o texto, juntamente com o nome opcional, são guardados na nossa base de dados e enviados por email à equipa. Se comunicar um problema, o relato e o endereço de email obrigatório, juntamente com o nome ou a referência do pedido opcionais, são guardados e enviados para que a equipa possa responder. As avaliações e os relatos são privados e não são publicados no website.',
           'Se utilizar o assistente, as mensagens que enviar são processadas para gerar respostas. Não inclua no chat nem noutros campos de texto livre informações pessoais sensíveis, palavras-passe, dados de pagamento, números de identificação, informações de saúde ou fotografias privadas.',
         ],
       },
@@ -708,10 +750,39 @@ function App() {
   const [contact, setContact] = useState<{ email: string; whatsapp: string }>({ email: '', whatsapp: '' });
   const lastAnalyticsPathRef = useRef('');
   const lastAnalyticsProductRef = useRef('');
+  const detailImageRef = useRef<HTMLDivElement>(null);
+  const [isImageFullscreen, setIsImageFullscreen] = useState(false);
+  const [fullscreenError, setFullscreenError] = useState('');
   const clearAssistantGiftDraft = useCallback(() => setAssistantGiftDraft(null), []);
   const t = copy[language];
   const currentLocation = new URL(currentUrl, window.location.origin);
   const path = currentLocation.pathname.replace(/\/+$/, '') || '/';
+
+  useEffect(() => {
+    const syncFullscreenState = () => {
+      setIsImageFullscreen(document.fullscreenElement === detailImageRef.current);
+    };
+    document.addEventListener('fullscreenchange', syncFullscreenState);
+    return () => document.removeEventListener('fullscreenchange', syncFullscreenState);
+  }, []);
+
+  const toggleImageFullscreen = async () => {
+    const imageFrame = detailImageRef.current;
+    setFullscreenError('');
+    if (!imageFrame) return;
+    try {
+      if (document.fullscreenElement === imageFrame) {
+        await document.exitFullscreen();
+      } else if (imageFrame.requestFullscreen) {
+        await imageFrame.requestFullscreen();
+      } else {
+        setFullscreenError(t.fullscreenUnavailable);
+      }
+    } catch (error) {
+      console.error('Could not change product image fullscreen mode', error);
+      setFullscreenError(t.fullscreenUnavailable);
+    }
+  };
 
   useEffect(() => {
     if (lastAnalyticsPathRef.current === path) return;
@@ -1270,6 +1341,17 @@ function App() {
         </div>
       </section>
     );
+  } else if (path === '/product-enquiry') {
+    page = <ProductEnquiry
+      catalog={catalog}
+      catalogState={catalogState}
+      initialProduct={currentLocation.searchParams.get('product') || ''}
+      language={language}
+      t={t}
+      nameFor={nameFor}
+      productImage={productImage}
+      imageStyle={imageStyle}
+    />;
   } else if (path.startsWith('/product/')) {
     const productImages = selectedItem?.images?.filter(Boolean) || [];
     const primaryIndex = selectedItem
@@ -1285,14 +1367,29 @@ function App() {
         <a className="text-link back-link" href="/shop">← {t.backShop}</a>
         <div className="detail-grid">
           <div className="detail-gallery">
-            <div className="detail-image">
+            <div className="detail-image" ref={detailImageRef}>
               {activeImage
                 ? <img src={activeImage} alt={`${nameFor(selectedItem)} — ${t.imageNumber(activeImageIndex + 1, productImages.length)}`} style={activeImageStyle} />
                 : <span className="image-placeholder">✦</span>}
+              {activeImage && <button
+                className="gallery-fullscreen-toggle"
+                type="button"
+                aria-label={isImageFullscreen ? t.exitImageFullscreen : t.viewImageFullscreen}
+                title={isImageFullscreen ? t.exitImageFullscreen : t.viewImageFullscreen}
+                onClick={() => void toggleImageFullscreen()}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d={isImageFullscreen
+                    ? 'M8 3v5H3M16 3v5h5M8 21v-5H3m13 5v-5h5'
+                    : 'M3 8V3h5M16 3h5v5M3 16v5h5m8 0h5v-5'} />
+                </svg>
+                <span>{isImageFullscreen ? t.exitImageFullscreen : t.viewImageFullscreen}</span>
+              </button>}
               {productImages.length > 1 && (
                 <span className="gallery-count" aria-live="polite">{t.imageNumber(activeImageIndex + 1, productImages.length)}</span>
               )}
             </div>
+            {fullscreenError && <p className="notice notice-error" role="alert">{fullscreenError}</p>}
             {productImages.length > 1 && (
               <div className="detail-thumbnails" role="group" aria-label={nameFor(selectedItem)}>
                 {productImages.map((image, index) => (
@@ -1326,7 +1423,7 @@ function App() {
             <p>{descriptionFor(selectedItem)}</p>
             <strong className="detail-price">{selectedItem.price_mzn != null ? `${Number(selectedItem.price_mzn).toLocaleString(language === 'pt' ? 'pt-MZ' : 'en-US')} MZN` : t.noPrice}</strong>
             <EnquiryGuidance t={t} compact />
-            <div className="button-row"><a className="button button-primary" href={`/gift-builder?product=${encodeURIComponent(selectedItem.id)}`}>{t.buildWith}</a><a className="button button-outline" href="/gift-builder">{t.requestQuote}</a></div>
+            <div className="button-row"><a className="button button-primary" href={`/product-enquiry?product=${encodeURIComponent(selectedItem.id)}`}>{t.buildWith}</a></div>
           </div>
         </div>
       </section>
@@ -1641,6 +1738,237 @@ function CustomerReviews({ language, t }: { language: Language; t: typeof copy[L
           <label className="consent-check"><input type="checkbox" required checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span>{submissionType === 'review' ? t.reviewConsent : t.reviewConsentProblem} <a href="/privacy">{t.privacy}</a></span></label>
           {error && <p className="notice notice-error" role="alert">{error}</p>}
           <button className="button button-primary" type="submit" disabled={busy}>{busy ? t.reviewSending : submissionType === 'review' ? t.reviewSubmit : t.reportProblem}</button>
+        </form>
+      )}
+    </section>
+  );
+}
+
+function ProductEnquiry({
+  catalog, catalogState, initialProduct, language, t, nameFor, productImage, imageStyle,
+}: {
+  catalog: CatalogResponse;
+  catalogState: 'loading' | 'ready' | 'error';
+  initialProduct: string;
+  language: Language;
+  t: typeof copy[Language];
+  nameFor: (item: CatalogItem) => string;
+  productImage: (item: CatalogItem) => string;
+  imageStyle: (item: CatalogItem, index: number) => CSSProperties;
+}) {
+  const [selectedIds, setSelectedIds] = useState<string[]>(initialProduct ? [initialProduct] : []);
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [productToAdd, setProductToAdd] = useState('');
+  const [productPickerOpen, setProductPickerOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [message, setMessage] = useState('');
+  const [consent, setConsent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [sent, setSent] = useState(false);
+  const productPickerRef = useRef<HTMLDivElement>(null);
+  const productPickerTriggerRef = useRef<HTMLButtonElement>(null);
+  const selectedProducts = selectedIds
+    .map((id) => catalog.items.find((item) => item.id === id))
+    .filter((item): item is CatalogItem => Boolean(item));
+  const availableProducts = catalog.items.filter((item) => !selectedIds.includes(item.id));
+  const productToAddItem = availableProducts.find((item) => item.id === productToAdd);
+
+  useEffect(() => {
+    if (!productPickerOpen) return;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (event.target instanceof Node && !productPickerRef.current?.contains(event.target)) {
+        setProductPickerOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setProductPickerOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [productPickerOpen]);
+
+  const addProduct = () => {
+    if (!productToAdd || selectedIds.includes(productToAdd)) return;
+    if (selectedIds.length >= 10) {
+      setError(t.productEnquiryAddLimit);
+      return;
+    }
+    setSelectedIds((ids) => [...ids, productToAdd]);
+    setProductToAdd('');
+    setError('');
+  };
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError('');
+    if (!selectedIds.length) {
+      setError(t.productEnquiryNoProducts);
+      return;
+    }
+    setBusy(true);
+    try {
+      const response = await fetch('/api/product-enquiries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          email,
+          phone,
+          language,
+          products: selectedIds.map((productId) => ({
+            productId,
+            quantity: quantities[productId] || 1,
+          })),
+          message,
+          consent,
+          website: String(new FormData(event.currentTarget).get('website') || ''),
+        }),
+      });
+      if (!response.ok) {
+        setError(response.status === 503 ? t.productEnquiryUnavailable : t.productEnquiryError);
+        return;
+      }
+      setSent(true);
+      trackAnalyticsEvent('enquiry_submitted', '/product-enquiry', {
+        productCount: selectedIds.length,
+        language,
+      });
+    } catch {
+      setError(t.productEnquiryError);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="section content-page product-enquiry-page">
+      <a
+        className="button button-outline product-enquiry-back"
+        href={initialProduct ? `/product/${encodeURIComponent(initialProduct)}` : '/shop'}
+      >
+        <span aria-hidden="true">←</span>
+        {t.productEnquiryBack}
+      </a>
+      <span className="eyebrow eyebrow-coral">{t.productEnquiryProducts}</span>
+      <h1>{t.productEnquiryTitle}</h1>
+      <p className="policy-intro">{t.productEnquiryIntro}</p>
+      {sent ? <p className="notice product-enquiry-success" role="status">{t.productEnquirySent}</p> : (
+        <form className="product-enquiry-form" onSubmit={submit}>
+          <fieldset className="product-enquiry-selection" aria-label={t.productEnquiryProducts}>
+            {selectedProducts.map((item) => (
+              <article className="product-enquiry-item" key={item.id}>
+                {productImage(item) && <img src={productImage(item)} alt="" style={imageStyle(item, item.primary_image_index)} />}
+                <div className="product-enquiry-item-copy">
+                  <strong>{nameFor(item)}</strong>
+                  <small>{item.id}{item.price_mzn != null
+                    ? ` · ${Number(item.price_mzn).toLocaleString(language === 'pt' ? 'pt-MZ' : 'en-US')} MZN`
+                    : ''}</small>
+                </div>
+                <label className="product-enquiry-quantity">
+                  <span>{t.productEnquiryQuantity}</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    required
+                    value={quantities[item.id] || 1}
+                    onChange={(event) => setQuantities((current) => ({
+                      ...current,
+                      [item.id]: Math.max(1, Math.min(100, Number(event.target.value) || 1)),
+                    }))}
+                  />
+                </label>
+                <button
+                  className="text-link product-enquiry-remove"
+                  type="button"
+                  onClick={() => setSelectedIds((ids) => ids.filter((id) => id !== item.id))}
+                >
+                  <svg aria-hidden="true" viewBox="0 0 16 16" focusable="false">
+                    <path d="M3 4.5h10M6 4.5v-1h4v1m-5.5 0 .6 8h5.8l.6-8M6.5 6.5v4m3-4v4" />
+                  </svg>
+                  {t.productEnquiryRemoveProduct}
+                </button>
+              </article>
+            ))}
+            {selectedIds.filter((id) => !catalog.items.some((item) => item.id === id)).map((id) => (
+              <article className="product-enquiry-item product-enquiry-unavailable" key={id}>
+                <p className="notice notice-error" role="alert">{t.productEnquiryUnavailableProduct} ({id})</p>
+                <button className="text-link product-enquiry-remove" type="button" onClick={() => setSelectedIds((ids) => ids.filter((selectedId) => selectedId !== id))}>
+                  <svg aria-hidden="true" viewBox="0 0 16 16" focusable="false">
+                    <path d="M3 4.5h10M6 4.5v-1h4v1m-5.5 0 .6 8h5.8l.6-8M6.5 6.5v4m3-4v4" />
+                  </svg>
+                  {t.productEnquiryRemoveProduct}
+                </button>
+              </article>
+            ))}
+            {catalogState === 'error' && <p className="notice notice-error" role="alert">{t.catalogError}</p>}
+            <div className="product-enquiry-add">
+              <label>
+                <span>{t.productEnquiryAddProduct}</span>
+                    <div className="product-enquiry-picker" ref={productPickerRef}>
+                      <button
+                        className="product-enquiry-picker-trigger"
+                        ref={productPickerTriggerRef}
+                        type="button"
+                        aria-expanded={productPickerOpen}
+                        aria-controls="product-enquiry-picker-options"
+                        disabled={catalogState !== 'ready' || selectedIds.length >= 10}
+                        onClick={() => setProductPickerOpen((open) => !open)}
+                      >
+                        {productToAddItem ? (
+                          <>
+                            {productImage(productToAddItem) && <img src={productImage(productToAddItem)} alt="" style={imageStyle(productToAddItem, productToAddItem.primary_image_index)} />}
+                            <span>{nameFor(productToAddItem)}</span>
+                          </>
+                        ) : <span>{t.productEnquiryChooseProduct}</span>}
+                        <svg className="product-enquiry-picker-chevron" aria-hidden="true" viewBox="0 0 16 16">
+                          <path d="m4 6 4 4 4-4" />
+                        </svg>
+                      </button>
+                      {productPickerOpen && (
+                        <div className="product-enquiry-picker-options" id="product-enquiry-picker-options" role="group" aria-label={t.productEnquiryChooseProduct}>
+                          {availableProducts.map((item) => (
+                            <button
+                              className="product-enquiry-picker-option"
+                              type="button"
+                              key={item.id}
+                              aria-pressed={productToAdd === item.id}
+                              onClick={() => {
+                                setProductToAdd(item.id);
+                                setProductPickerOpen(false);
+                                productPickerTriggerRef.current?.focus();
+                              }}
+                            >
+                              {productImage(item) && <img src={productImage(item)} alt="" style={imageStyle(item, item.primary_image_index)} loading="lazy" />}
+                              <span>{nameFor(item)}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+              </label>
+              <button className="button button-outline" type="button" onClick={addProduct} disabled={!productToAdd || selectedIds.length >= 10}>
+                {t.productEnquiryAddButton}
+              </button>
+            </div>
+          </fieldset>
+          <label>{t.name}<input autoComplete="name" maxLength={120} required value={name} onChange={(event) => setName(event.target.value)} /></label>
+          <label>{t.email}<input type="email" autoComplete="email" maxLength={254} required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
+          <label>{t.phone}<input type="tel" autoComplete="tel" maxLength={40} value={phone} onChange={(event) => setPhone(event.target.value)} /></label>
+          <label>{t.productEnquiryMessage}<textarea maxLength={1200} value={message} onChange={(event) => setMessage(event.target.value)} /></label>
+          <label className="honeypot" aria-hidden="true">Website<input name="website" tabIndex={-1} autoComplete="off" /></label>
+          <label className="consent-check"><input type="checkbox" required checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span>{t.productEnquiryConsent} <a href="/privacy">{t.privacy}</a></span></label>
+          {error && <p className="notice notice-error" role="alert">{error}</p>}
+          <button className="button button-primary" type="submit" disabled={busy || catalogState !== 'ready' || selectedProducts.length !== selectedIds.length}>
+            {busy ? t.sending : t.productEnquirySubmit}
+          </button>
         </form>
       )}
     </section>

@@ -46,6 +46,7 @@ test('storefront health endpoint is public and omits Express identification', as
 
 test('page metadata renders route-specific, escaped social previews and canonical URLs', () => {
   assert.equal(getPageMetadata('/faq', 'en').title, 'Customer FAQ | The Discovery Box');
+  assert.equal(getPageMetadata('/product-enquiry', 'en').robots, 'noindex,follow');
   assert.match(getPageMetadata('/faq', 'pt').description, /amostras e fidelidade/);
   assert.equal(getPageMetadata('/reviews', 'en').title, 'Reviews & Problem Reports | The Discovery Box');
   assert.match(getPageMetadata('/reviews', 'pt').description, /avaliação privada|comunique um problema/);
@@ -291,6 +292,150 @@ test('enquiry API rejects unconsented or malformed input before provider calls',
     }),
   });
   assert.equal(response.status, 400);
+});
+
+test('product enquiry API validates contact details, products, quantities and consent', async () => {
+  const response = await fetch(`${baseUrl}/api/product-enquiries`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: 'Visitor',
+      email: 'visitor@example.com',
+      language: 'en',
+      products: [{ productId: 'PL01', quantity: 101 }],
+      consent: true,
+    }),
+  });
+  assert.equal(response.status, 400);
+
+  const noConsentResponse = await fetch(`${baseUrl}/api/product-enquiries`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: 'Visitor',
+      email: 'visitor@example.com',
+      language: 'en',
+      products: [{ productId: 'PL01', quantity: 1 }],
+    }),
+  });
+  assert.equal(noConsentResponse.status, 400);
+});
+
+test('product enquiry API reports missing email configuration without claiming success', async () => {
+  process.env.SUPABASE_URL = 'https://product-enquiry-test.supabase.co';
+  process.env.SUPABASE_PUBLISHABLE_KEY = 'test-public-key';
+  try {
+    const response = await fetch(`${baseUrl}/api/product-enquiries`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Visitor',
+        email: 'visitor@example.com',
+        language: 'en',
+        products: [{ productId: 'PL01', quantity: 1 }],
+        consent: true,
+      }),
+    });
+    assert.equal(response.status, 503);
+    assert.match((await response.json()).error, /email is not configured/i);
+  } finally {
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_PUBLISHABLE_KEY;
+  }
+});
+
+test('product enquiry sends customer details, quantities and catalogue images in a modern HTML email', async () => {
+  const originalFetch = globalThis.fetch;
+  type ProductEnquiryEmail = {
+    sender: { name: string; email: string };
+    to: { email: string }[];
+    replyTo: { email: string };
+    subject: string;
+    htmlContent: string;
+  };
+  let providerRequest: ProductEnquiryEmail | null = null;
+  process.env.SUPABASE_URL = 'https://product-enquiry-test.supabase.co';
+  process.env.SUPABASE_PUBLISHABLE_KEY = 'test-public-key';
+  process.env.BREVO_API_KEY = 'test-brevo-key';
+  process.env.BREVO_FROM_EMAIL = 'comercial.discoverybox@gmail.com';
+  process.env.BREVO_FROM_NAME = 'The Discovery Box';
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url.includes('/rest/v1/public_catalog_items')) {
+      return new Response(JSON.stringify([
+        {
+          id: 'PL01',
+          family: 'PLAY',
+          name_en: 'Custom Pencil Caps',
+          name_pt: 'Tampas de lápis personalizadas',
+          price_mzn: 150,
+          images: ['/api/storage/catalog-items/pencil-caps.png'],
+          primary_image_index: 0,
+        },
+        {
+          id: 'HOME02',
+          family: 'HOME',
+          name_en: 'Desk Vase',
+          name_pt: 'Vaso de secretária',
+          price_mzn: null,
+          images: ['https://images.example.com/desk-vase.jpg'],
+          primary_image_index: 0,
+        },
+      ]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (url === 'https://api.brevo.com/v3/smtp/email') {
+      providerRequest = JSON.parse(String(init?.body)) as ProductEnquiryEmail;
+      return new Response(null, { status: 201 });
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const response = await originalFetch(`${baseUrl}/api/product-enquiries`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Ana <Example>',
+        email: 'ana@example.com',
+        phone: '+258 84 123 4567',
+        language: 'en',
+        products: [
+          { productId: 'PL01', quantity: 2 },
+          { productId: 'HOME02', quantity: 1 },
+        ],
+        message: 'Please advise on <custom colors>.',
+        consent: true,
+      }),
+    });
+    assert.equal(response.status, 202);
+    assert.deepEqual(await response.json(), { status: 'accepted' });
+  } finally {
+    globalThis.fetch = originalFetch;
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_PUBLISHABLE_KEY;
+    delete process.env.BREVO_API_KEY;
+    delete process.env.BREVO_FROM_EMAIL;
+    delete process.env.BREVO_FROM_NAME;
+  }
+
+  assert.ok(providerRequest);
+  assert.deepEqual(providerRequest.sender, {
+    name: 'The Discovery Box',
+    email: 'comercial.discoverybox@gmail.com',
+  });
+  assert.deepEqual(providerRequest.to, [{ email: 'comercial.discoverybox@gmail.com' }]);
+  assert.deepEqual(providerRequest.replyTo, { email: 'ana@example.com' });
+  assert.match(providerRequest.subject, /Ana <Example>/);
+  assert.match(providerRequest.htmlContent, /<!doctype html>/i);
+  assert.match(providerRequest.htmlContent, /max-width:600px/);
+  assert.match(providerRequest.htmlContent, /New product enquiry/);
+  assert.match(providerRequest.htmlContent, /Ana &lt;Example&gt;/);
+  assert.match(providerRequest.htmlContent, /Custom Pencil Caps/);
+  assert.match(providerRequest.htmlContent, /Quantity: 2/);
+  assert.match(providerRequest.htmlContent, /public\/catalog-items\/pencil-caps\.png/);
+  assert.match(providerRequest.htmlContent, /https:\/\/images\.example\.com\/desk-vase\.jpg/);
+  assert.match(providerRequest.htmlContent, /Please advise on &lt;custom colors&gt;\./);
+  assert.doesNotMatch(providerRequest.htmlContent, /<custom colors>/);
 });
 
 test('review API rejects invalid submissions and reports missing storage or email configuration', async () => {
