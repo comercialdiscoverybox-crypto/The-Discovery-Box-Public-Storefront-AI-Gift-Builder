@@ -36,6 +36,13 @@ const labels = {
     close: 'Close map',
     cancel: 'Cancel',
     instructions: 'Move around the map, then click the exact delivery spot or drag the pin. Address results can be incomplete; review and edit them before sending.',
+    useMyLocation: 'Use my location',
+    locating: 'Finding your location…',
+    locationPermissionDenied: 'Location permission was denied. Allow location access in your browser settings or choose a spot on the map.',
+    locationUnavailable: 'Your location is unavailable. Check that location services are enabled or choose a spot on the map.',
+    locationTimeout: 'We could not get your location in time. Try again or choose a spot on the map.',
+    locationError: 'We could not get your location. Try again or choose a spot on the map.',
+    locationMapNotReady: 'The map is still loading. Please try again.',
     lookingUp: 'Looking up address details…',
     lookupError: 'We could not retrieve address details for this pin. Try another spot or enter the address below.',
     noAddress: 'The map provider returned no address details for this pin. You can still use the coordinates.',
@@ -51,6 +58,13 @@ const labels = {
     close: 'Fechar mapa',
     cancel: 'Cancelar',
     instructions: 'Navegue pelo mapa e toque no local exato de entrega ou arraste o marcador. Os resultados do endereço podem estar incompletos; reveja-os e edite-os antes de enviar.',
+    useMyLocation: 'Usar a minha localização',
+    locating: 'A localizar…',
+    locationPermissionDenied: 'A permissão de localização foi recusada. Permita o acesso à localização nas definições do navegador ou escolha um local no mapa.',
+    locationUnavailable: 'A sua localização não está disponível. Verifique se os serviços de localização estão ativos ou escolha um local no mapa.',
+    locationTimeout: 'Não foi possível obter a sua localização a tempo. Tente novamente ou escolha um local no mapa.',
+    locationError: 'Não foi possível obter a sua localização. Tente novamente ou escolha um local no mapa.',
+    locationMapNotReady: 'O mapa ainda está a carregar. Tente novamente.',
     lookingUp: 'A procurar os detalhes do endereço…',
     lookupError: 'Não foi possível obter os detalhes do endereço deste marcador. Experimente outro local ou introduza o endereço abaixo.',
     noAddress: 'O fornecedor do mapa não encontrou detalhes para este marcador. Ainda pode utilizar as coordenadas.',
@@ -97,9 +111,13 @@ export default function MapAddressPicker({ language, onUseAddress, onClose, init
   const abortControllerRef = useRef<AbortController | null>(null);
   const lookupTimerRef = useRef<number | null>(null);
   const lastLookupAtRef = useRef(0);
+  const placePinRef = useRef<((location: L.LatLng) => void) | null>(null);
+  const focusMapRef = useRef<((location: L.LatLng) => void) | null>(null);
   const [candidate, setCandidate] = useState<MapAddress | null>(null);
   const [lookupPending, setLookupPending] = useState(false);
   const [lookupError, setLookupError] = useState('');
+  const [locationPending, setLocationPending] = useState(false);
+  const [locationError, setLocationError] = useState('');
   const copy = labels[language];
 
   useEffect(() => {
@@ -231,6 +249,8 @@ export default function MapAddressPicker({ language, onUseAddress, onClose, init
       }
       reverseLookup(location);
     };
+    placePinRef.current = placePin;
+    focusMapRef.current = (location) => map.setView(location, 18);
 
     if (initialLocation) {
       marker = createMarker(L.latLng(initialLocation.latitude, initialLocation.longitude));
@@ -243,9 +263,45 @@ export default function MapAddressPicker({ language, onUseAddress, onClose, init
       resizeObserver.disconnect();
       abortControllerRef.current?.abort();
       if (lookupTimerRef.current !== null) window.clearTimeout(lookupTimerRef.current);
+      placePinRef.current = null;
+      focusMapRef.current = null;
       map.remove();
     };
   }, [copy.lookupError, copy.noAddress, initialLocation]);
+
+  const useDeviceLocation = () => {
+    setLocationError('');
+    if (!navigator.geolocation) {
+      setLocationError(copy.locationUnavailable);
+      return;
+    }
+    setLocationPending(true);
+    navigator.geolocation.getCurrentPosition((position) => {
+      const location = L.latLng(position.coords.latitude, position.coords.longitude);
+      const placePin = placePinRef.current;
+      if (!placePin) {
+        setLocationError(copy.locationMapNotReady);
+        setLocationPending(false);
+        return;
+      }
+      focusMapRef.current?.(location);
+      placePin(location);
+      setLocationPending(false);
+    }, (error) => {
+      setLocationError(error.code === error.PERMISSION_DENIED
+        ? copy.locationPermissionDenied
+        : error.code === error.POSITION_UNAVAILABLE
+          ? copy.locationUnavailable
+          : error.code === error.TIMEOUT
+            ? copy.locationTimeout
+            : copy.locationError);
+      setLocationPending(false);
+    }, {
+      enableHighAccuracy: true,
+      timeout: 15000,
+      maximumAge: 0,
+    });
+  };
 
   useEffect(() => {
     closeButtonRef.current?.focus();
@@ -268,6 +324,16 @@ export default function MapAddressPicker({ language, onUseAddress, onClose, init
         </header>
         <div className="address-map-picker">
           <p>{copy.instructions}</p>
+          <div className="address-map-location-actions">
+            <button className="button button-outline" type="button" onClick={useDeviceLocation} disabled={locationPending}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M19 10.2c0 5.1-7 10.3-7 10.3S5 15.3 5 10.2a7 7 0 1 1 14 0Z" />
+                <circle cx="12" cy="10" r="2.2" />
+              </svg>
+              {locationPending ? copy.locating : copy.useMyLocation}
+            </button>
+            {locationError && <p className="address-map-status address-map-error" role="alert">{locationError}</p>}
+          </div>
           <div className="address-map" ref={mapElementRef} role="region" aria-label={copy.instructions} />
           {lookupPending && <p className="address-map-status" role="status">{copy.lookingUp}</p>}
           {lookupError && <p className="address-map-status address-map-error" role="status">{lookupError}</p>}

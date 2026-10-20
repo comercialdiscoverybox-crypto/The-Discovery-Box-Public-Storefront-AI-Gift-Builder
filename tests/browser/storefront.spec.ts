@@ -84,6 +84,17 @@ async function installApiFixtures(page: Page) {
   }));
 }
 
+async function openGiftBuilderMap(page: Page) {
+  await page.goto('/gift-builder');
+  await page.getByRole('combobox', { name: 'What are we celebrating?' }).selectOption({ label: 'Birthday' });
+  await page.getByRole('combobox', { name: 'Who is it for?' }).selectOption({ label: 'Friend' });
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Add delivery address' }).click();
+  await page.getByRole('radio', { name: 'Use map' }).check();
+  await expect(page.getByRole('dialog', { name: 'Choose a delivery location' })).toBeVisible();
+}
+
 test.beforeEach(async ({ page }) => {
   await installApiFixtures(page);
 });
@@ -160,6 +171,64 @@ test('corporate hero image remains visible alongside the home carousel styles', 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(artwork).toBeVisible();
   await expect(artwork).toHaveCSS('opacity', '1');
+});
+
+test('map picker uses device location after permission and reverse looks it up', async ({ page }) => {
+  await page.context().grantPermissions(['geolocation'], { origin: 'http://127.0.0.1:4173' });
+  await page.context().setGeolocation({ latitude: -25.9692, longitude: 32.5732 });
+  await page.route('https://nominatim.openstreetmap.org/reverse**', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      display_name: 'Rua da Unidade, Maputo, Mozambique',
+      address: {
+        road: 'Rua da Unidade',
+        house_number: '12',
+        suburb: 'Polana',
+        city: 'Maputo',
+        state: 'Maputo City',
+        country: 'Mozambique',
+      },
+      osm_type: 'way',
+      osm_id: 12345,
+      category: 'building',
+      type: 'yes',
+      addresstype: 'building',
+    }),
+  }));
+  await openGiftBuilderMap(page);
+
+  await page.getByRole('button', { name: 'Use my location' }).click();
+  const candidate = page.locator('.address-map-candidate');
+  await expect(candidate).toContainText('Rua da Unidade');
+  await expect(candidate).toContainText('-25.969200, 32.573200');
+  await candidate.getByRole('button', { name: 'Yes, use this address' }).click();
+  await expect(page.locator('.selected-map-address')).toContainText('Rua da Unidade');
+  await expect(page.locator('.selected-map-address')).toContainText('-25.969200, 32.573200');
+});
+
+test('map picker explains when location permission is denied', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: {
+        getCurrentPosition: (_success: PositionCallback, error: PositionErrorCallback) => {
+          error({
+            code: 1,
+            message: 'Permission denied',
+            PERMISSION_DENIED: 1,
+            POSITION_UNAVAILABLE: 2,
+            TIMEOUT: 3,
+          });
+        },
+      } as Geolocation,
+    });
+  });
+  await openGiftBuilderMap(page);
+
+  await page.getByRole('button', { name: 'Use my location' }).click();
+  await expect(page.getByRole('alert')).toContainText('Location permission was denied');
+  await expect(page.getByRole('button', { name: 'Use my location' })).toBeEnabled();
 });
 
 test('shop lets customers retry after a catalogue request fails', async ({ page }) => {
@@ -387,6 +456,8 @@ test('saved inquiry control icon adapts to light and dark themes', async ({ page
 
   await page.getByRole('button', { name: 'Switch to dark mode' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(resumeButton).toHaveCSS('background-color', 'rgb(27, 42, 49)');
+  await expect(resumeButton).toHaveCSS('color', 'rgb(242, 246, 244)');
   const darkColors = await resumeButton.evaluate((button) => {
     const style = getComputedStyle(button);
     return { background: style.backgroundColor, color: style.color };

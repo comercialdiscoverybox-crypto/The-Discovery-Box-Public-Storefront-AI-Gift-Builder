@@ -42,6 +42,7 @@ test('storefront health endpoint is public and omits Express identification', as
   const response = await fetch(`${baseUrl}/api/health`);
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('x-powered-by'), null);
+  assert.equal(response.headers.get('permissions-policy'), 'camera=(), microphone=(), geolocation=(self)');
   assert.deepEqual(await response.json(), { status: 'ok' });
 });
 
