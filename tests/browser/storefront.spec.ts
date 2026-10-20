@@ -149,6 +149,19 @@ test('home hero artwork can be changed with accessible dots and reshuffles on re
   await expect(thirdSlide).toBeVisible();
 });
 
+test('corporate hero image remains visible alongside the home carousel styles', async ({ page }) => {
+  await page.goto('/corporate');
+
+  const artwork = page.locator('.corporate-hero .hero-artwork');
+  await expect(artwork).toBeVisible();
+  await expect.poll(() => artwork.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+  await expect(artwork).toHaveCSS('opacity', '1');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(artwork).toBeVisible();
+  await expect(artwork).toHaveCSS('opacity', '1');
+});
+
 test('shop lets customers retry after a catalogue request fails', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 900 });
   let requestCount = 0;

@@ -1288,6 +1288,7 @@ h1, h2, h3 { font-family: Manrope, sans-serif; letter-spacing: -.04em; }
   transform: none;
   -webkit-mask-image: none;
   mask-image: none;
+  opacity: 1;
 }
 .corporate-hero .hero-content {
   width: min(440px, 34%);
