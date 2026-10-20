@@ -140,6 +140,8 @@ test('home hero artwork can be changed with accessible dots and reshuffles on re
   await secondSlide.click();
   await expect(secondSlide).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.hero-artwork-active')).toHaveAttribute('src', '/friends-painting-figurine.webp');
+  await expect.poll(() => page.locator('.hero-artwork-active').evaluate((image: HTMLImageElement) => getComputedStyle(image).transitionDuration))
+    .toContain('0.9s');
   await expect.poll(() => page.locator('.hero-artwork-active').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
   await expect(page.locator('.hero-artwork-message-active')).toContainText('Create together.');
 
