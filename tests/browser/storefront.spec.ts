@@ -114,6 +114,41 @@ test('informational routes do not request the catalogue and shop requests a filt
   expect(request.searchParams.get('sort')).toBe('price-low');
 });
 
+test('home hero artwork can be changed with accessible dots and reshuffles on return home', async ({ page }) => {
+  await page.goto('/');
+
+  const carousel = page.getByRole('group', { name: 'Featured artwork' });
+  const firstSlide = carousel.getByRole('button', { name: 'Show hero image 1' });
+  const secondSlide = carousel.getByRole('button', { name: 'Show hero image 2' });
+  const thirdSlide = carousel.getByRole('button', { name: 'Show hero image 3' });
+  await expect(firstSlide).toBeVisible();
+  await expect(secondSlide).toBeVisible();
+  await expect(thirdSlide).toBeVisible();
+  await expect(carousel.locator('button[aria-pressed="true"]')).toHaveCount(1);
+
+  await secondSlide.click();
+  await expect(secondSlide).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.hero-artwork-active')).toHaveAttribute('src', '/friends-painting-figurine.webp');
+  await expect.poll(() => page.locator('.hero-artwork-active').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+  await expect(page.locator('.hero-artwork-message-active')).toContainText('Create together.');
+
+  await thirdSlide.click();
+  await expect(thirdSlide).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.hero-artwork-active')).toHaveAttribute('src', '/playful-animal-robot-workshop.webp');
+  await expect.poll(() => page.locator('.hero-artwork-active').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+  await expect(page.locator('.hero-artwork-message-active')).toContainText('Big ideas.');
+
+  await firstSlide.click();
+  await expect(page.locator('.hero-artwork-active')).toHaveAttribute('src', '/discovery-box-adventure.png');
+  await page.getByRole('link', { name: 'Shop' }).first().click();
+  await page.getByRole('link', { name: 'Home', exact: true }).click();
+  await expect(page.locator('.hero-artwork-active')).toHaveAttribute('src', '/friends-painting-figurine.webp');
+
+  await page.setViewportSize({ width: 320, height: 812 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await expect(thirdSlide).toBeVisible();
+});
+
 test('shop lets customers retry after a catalogue request fails', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 900 });
   let requestCount = 0;
@@ -153,6 +188,43 @@ test('shop lets customers retry after a catalogue request fails', async ({ page 
   expect(requestCount).toBeGreaterThanOrEqual(2);
 });
 
+test('assistant retries the failed message without duplicating it', async ({ page }) => {
+  const requestMessages: unknown[] = [];
+  let requestCount = 0;
+  await page.route('**/api/assistant/chat', async (route) => {
+    requestCount += 1;
+    requestMessages.push(JSON.parse(route.request().postData() ?? '{}').messages);
+    if (requestCount === 1) {
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'The assistant is temporarily unavailable.' }),
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ answer: 'Here are a few gift ideas.' }),
+    });
+  });
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Chat with Fox, your gift guide' }).click();
+  const input = page.getByRole('textbox', { name: 'Ask about gifts or products…' });
+  await input.fill('Suggest a gift for a friend');
+  await page.getByRole('button', { name: 'Send message' }).click();
+
+  const retryButton = page.getByRole('button', { name: 'Retry' });
+  await expect(retryButton).toBeVisible();
+  await retryButton.click();
+  await expect(page.getByText('Here are a few gift ideas.')).toBeVisible();
+  expect(requestCount).toBe(2);
+  expect(requestMessages[1]).toEqual(requestMessages[0]);
+  await expect(page.getByText('Suggest a gift for a friend', { exact: true })).toHaveCount(1);
+});
+
 test('key storefront routes do not overflow at narrow or common viewport widths', async ({ page }) => {
   const routes = ['/', '/shop', '/gift-builder', '/product-enquiry', '/contact', '/faq'];
   for (const width of [320, 390, 768, 1440]) {
@@ -178,6 +250,167 @@ test('gift builder validates required choices before advancing', async ({ page }
   await page.goto('/gift-builder');
   await page.getByRole('button', { name: 'Continue' }).click();
   await expect(page.getByRole('alert')).toBeVisible();
+});
+
+test('preferred contact choices show icons and keep labels on one line on mobile', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.goto('/gift-builder');
+  await page.locator('.builder-panel select').nth(0).selectOption({ index: 1 });
+  await page.locator('.builder-panel select').nth(1).selectOption({ index: 1 });
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+
+  const options = page.locator('.preferred-contact-option');
+  await expect(options).toHaveCount(3);
+  for (const option of await options.all()) {
+    await expect(option.locator('svg')).toBeVisible();
+    const text = option.locator('span');
+    await expect(text).toHaveCSS('white-space', 'nowrap');
+    const dimensions = await option.evaluate((element) => ({
+      textWidth: element.querySelector('span')?.getBoundingClientRect().width ?? 0,
+      textScrollWidth: element.querySelector('span')?.scrollWidth ?? 0,
+      textClientWidth: element.querySelector('span')?.clientWidth ?? 0,
+    }));
+    expect(dimensions.textScrollWidth, `contact option text wraps or clips: ${JSON.stringify(dimensions)}`)
+      .toBeLessThanOrEqual(dimensions.textClientWidth);
+    expect(dimensions.textWidth).toBeGreaterThan(0);
+  }
+
+  const documentWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(documentWidth).toBeLessThanOrEqual(320);
+});
+
+test('preferred contact buttons size to their contents instead of filling the form width', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/gift-builder');
+  await page.locator('.builder-panel select').nth(0).selectOption({ index: 1 });
+  await page.locator('.builder-panel select').nth(1).selectOption({ index: 1 });
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+
+  const dimensions = await page.locator('.preferred-contact').evaluate((fieldset) => {
+    const options = Array.from(fieldset.querySelectorAll<HTMLElement>('.preferred-contact-option'));
+    const group = fieldset.querySelector<HTMLElement>('.preferred-contact-options');
+    return {
+      fieldsetWidth: fieldset.getBoundingClientRect().width,
+      groupWidth: group?.getBoundingClientRect().width ?? 0,
+      optionWidths: options.map((option) => option.getBoundingClientRect().width),
+    };
+  });
+  expect(dimensions.optionWidths).toHaveLength(3);
+  for (const width of dimensions.optionWidths) expect(width).toBeLessThan(180);
+  expect(dimensions.groupWidth).toBeLessThan(dimensions.fieldsetWidth / 2);
+});
+
+test('gift builder progress can be saved, resumed, or discarded while navigating', async ({ page }) => {
+  await page.goto('/gift-builder');
+  const occasion = page.getByRole('combobox', { name: 'What are we celebrating?' });
+  const recipient = page.getByRole('combobox', { name: 'Who is it for?' });
+  await occasion.selectOption({ label: 'Birthday' });
+  await recipient.selectOption({ label: 'Friend' });
+
+  await page.getByRole('link', { name: 'Shop' }).click();
+  const prompt = page.getByRole('alertdialog');
+  await expect(prompt).toBeVisible();
+  await page.getByRole('button', { name: 'Stay on this form' }).click();
+  await expect(prompt).toBeHidden();
+  await expect(occasion).toHaveValue('Birthday');
+
+  await page.getByRole('link', { name: 'Shop' }).click();
+  await page.getByRole('button', { name: 'Save and continue' }).click();
+  await expect(page).toHaveURL(/\/shop$/);
+  const resumeButton = page.getByRole('button', { name: 'Continue your gift inquiry' });
+  await expect(resumeButton).toBeVisible();
+  await resumeButton.click();
+  await expect(page).toHaveURL(/\/gift-builder$/);
+  await expect(page.getByRole('combobox', { name: 'What are we celebrating?' })).toHaveValue('Birthday');
+  await expect(page.getByRole('combobox', { name: 'Who is it for?' })).toHaveValue('Friend');
+
+  await page.getByRole('link', { name: 'Shop' }).click();
+  await page.getByRole('button', { name: 'Leave without saving' }).click();
+  await expect(page.getByRole('button', { name: 'Continue your gift inquiry' })).toHaveCount(0);
+  await page.getByRole('link', { name: 'Gift builder' }).click();
+  await expect(page.getByRole('combobox', { name: 'What are we celebrating?' })).toHaveValue('');
+});
+
+test('saved inquiry progress is cleared by a page refresh', async ({ page }) => {
+  await page.goto('/gift-builder');
+  await page.getByRole('combobox', { name: 'What are we celebrating?' }).selectOption({ label: 'Birthday' });
+  await page.getByRole('combobox', { name: 'Who is it for?' }).selectOption({ label: 'Friend' });
+  await page.getByRole('link', { name: 'Shop' }).click();
+  await page.getByRole('button', { name: 'Save and continue' }).click();
+  await expect(page.getByRole('button', { name: 'Continue your gift inquiry' })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Continue your gift inquiry' })).toHaveCount(0);
+});
+
+test('closing the saved inquiry control discards the saved progress', async ({ page }) => {
+  await page.goto('/gift-builder');
+  await page.getByRole('combobox', { name: 'What are we celebrating?' }).selectOption({ label: 'Birthday' });
+  await page.getByRole('combobox', { name: 'Who is it for?' }).selectOption({ label: 'Friend' });
+  await page.getByRole('link', { name: 'Shop' }).click();
+  await page.getByRole('button', { name: 'Save and continue' }).click();
+  await page.getByRole('button', { name: 'Discard saved inquiry' }).click();
+  await expect(page.getByRole('button', { name: 'Continue your gift inquiry' })).toHaveCount(0);
+});
+
+test('saved inquiry control icon adapts to light and dark themes', async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.removeItem('discovery-theme'));
+  await page.goto('/gift-builder');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await page.getByRole('combobox', { name: 'What are we celebrating?' }).selectOption({ label: 'Birthday' });
+  await page.getByRole('combobox', { name: 'Who is it for?' }).selectOption({ label: 'Friend' });
+  await page.getByRole('link', { name: 'Shop' }).click();
+  await page.getByRole('button', { name: 'Save and continue' }).click();
+
+  const resumeButton = page.getByRole('button', { name: 'Continue your gift inquiry' });
+  const icon = resumeButton.locator('svg');
+  await expect(icon).toBeVisible();
+  await expect(icon.locator('.saved-inquiry-icon-accent')).toHaveAttribute('d', 'M9 18.5h3');
+  const lightColors = await resumeButton.evaluate((button) => {
+    const style = getComputedStyle(button);
+    return { background: style.backgroundColor, color: style.color };
+  });
+
+  await page.getByRole('button', { name: 'Switch to dark mode' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  const darkColors = await resumeButton.evaluate((button) => {
+    const style = getComputedStyle(button);
+    return { background: style.backgroundColor, color: style.color };
+  });
+  expect(darkColors.background).not.toBe(lightColors.background);
+  expect(darkColors.color).not.toBe(lightColors.color);
+  await expect(resumeButton.locator('svg .saved-inquiry-icon-accent')).toHaveCSS('stroke', 'rgb(107, 216, 206)');
+});
+
+test('browser back asks before leaving a filled gift builder', async ({ page }) => {
+  await page.goto('/shop');
+  await page.getByRole('link', { name: 'Gift builder' }).click();
+  await page.getByRole('combobox', { name: 'What are we celebrating?' }).selectOption({ label: 'Birthday' });
+  await page.getByRole('combobox', { name: 'Who is it for?' }).selectOption({ label: 'Friend' });
+
+  await page.goBack();
+  await expect(page.getByRole('alertdialog')).toBeVisible();
+  await page.getByRole('button', { name: 'Save and continue' }).click();
+  await expect(page).toHaveURL(/\/shop$/);
+  await expect(page.getByRole('button', { name: 'Continue your gift inquiry' })).toBeVisible();
+});
+
+test('product enquiry form progress can be saved and resumed', async ({ page }) => {
+  await page.goto('/product-enquiry?product=GIFT-001');
+  await page.getByRole('textbox', { name: 'Your name' }).fill('Taylor Customer');
+  await page.getByRole('textbox', { name: 'Email' }).fill('taylor@example.com');
+  await page.getByRole('textbox', { name: 'Question or customization note (optional)' }).fill('Please include a birthday note.');
+
+  await page.getByRole('link', { name: 'Shop' }).click();
+  await page.getByRole('button', { name: 'Save and continue' }).click();
+  await page.getByRole('button', { name: 'Continue your product inquiry' }).click();
+  await expect(page).toHaveURL(/\/product-enquiry$/);
+  await expect(page.getByRole('textbox', { name: 'Your name' })).toHaveValue('Taylor Customer');
+  await expect(page.getByRole('textbox', { name: 'Email' })).toHaveValue('taylor@example.com');
+  await expect(page.getByRole('textbox', { name: 'Question or customization note (optional)' }))
+    .toHaveValue('Please include a birthday note.');
+  await expect(page.getByText('Creative Puzzle')).toBeVisible();
 });
 
 test('product details dialog traps keyboard focus and restores its trigger', async ({ page }) => {

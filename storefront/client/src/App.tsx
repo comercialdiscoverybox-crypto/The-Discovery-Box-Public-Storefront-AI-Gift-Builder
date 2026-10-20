@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import { Fragment, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import AssistantWidget from './AssistantWidget';
 import type { AssistantGiftDraft } from './assistantTypes';
 import type { MapAddress } from './MapAddressPicker';
@@ -14,6 +14,59 @@ type EnquiryAddress = Omit<MapAddress, 'latitude' | 'longitude'> & {
   latitude: number | null;
   longitude: number | null;
 };
+type GiftBuilderProgress = {
+  kind: 'gift-builder';
+  step: number;
+  selected: string[];
+  occasion: string;
+  occasionDetails: string;
+  recipient: string;
+  recipientDetails: string;
+  budget: string;
+  preferences: string;
+  cardMessage: string;
+  name: string;
+  email: string;
+  phone: string;
+  preferredContact: 'email' | 'phone' | 'whatsapp';
+  address: EnquiryAddress;
+  visibleOptionalFields: Record<string, boolean>;
+  deliveryAddressVisible: boolean;
+  addressEntryMode: 'manual' | 'map' | null;
+  consent: boolean;
+  showAllProducts: boolean;
+};
+type ProductEnquiryProgress = {
+  kind: 'product-enquiry';
+  selectedIds: string[];
+  quantities: Record<string, number>;
+  productToAdd: string;
+  name: string;
+  email: string;
+  phone: string;
+  message: string;
+  consent: boolean;
+};
+type InquiryProgress = GiftBuilderProgress | ProductEnquiryProgress;
+
+function hasInquiryProgress(progress: InquiryProgress): boolean {
+  if (progress.kind === 'gift-builder') {
+    return progress.step > 1 || progress.selected.length > 0 || Boolean(
+      progress.occasion || progress.occasionDetails || progress.recipient ||
+      progress.recipientDetails || progress.budget || progress.preferences ||
+      progress.cardMessage || progress.name || progress.email || progress.phone ||
+      Object.values(progress.address).some((value) => typeof value === 'string' ? Boolean(value.trim()) : value !== null) ||
+      progress.deliveryAddressVisible ||
+      progress.consent || progress.showAllProducts ||
+      Object.values(progress.visibleOptionalFields).some(Boolean),
+    );
+  }
+  return progress.selectedIds.length > 0 || Boolean(
+    progress.productToAdd || progress.name || progress.email || progress.phone ||
+    progress.message || progress.consent,
+  );
+}
+
 const emptyEnquiryAddress: EnquiryAddress = {
   placeName: '',
   road: '',
@@ -122,7 +175,9 @@ const copy = {
     chosenWithCare: 'Chosen with care',
     madeForYou: <>made<br />for you</>,
     heroEyebrow: 'Personalized gifts for every moment',
-    heroArtworkMessage: ['Small', 'surprises.', 'Big smiles.'],
+    heroArtworkMessages: [['Small', 'surprises.', 'Big smiles.'], ['Create together.', 'Make it memorable.'], ['Big ideas.', 'Start with play.']],
+    heroCarouselLabel: 'Featured artwork',
+    heroSlideLabel: (slide: number) => `Show hero image ${slide}`,
     heroTitle: <>More than gifts,<br />it’s a <span className="hero-title-highlight"><span>d</span><span>i</span><span>s</span><span>c</span><span>o</span><span>v</span><span>e</span><span>r</span><span>y</span></span><span className="hero-title-period">.</span></>,
     heroBody: 'Explore unique products, create personalized gift ideas and make every moment extra special.',
     heroCta: 'Start building',
@@ -181,6 +236,14 @@ const copy = {
     empty: 'Our collection is being prepared. Please check back soon.',
     catalogError: 'We could not load the catalogue right now. Please try again shortly.',
     catalogRetry: 'Try again',
+    inquiryLeaveTitle: 'Save your progress?',
+    inquiryLeaveDescription: 'Your inquiry has not been sent. Save it to continue elsewhere on this site. It will be cleared if you refresh or leave the website.',
+    inquirySaveAndLeave: 'Save and continue',
+    inquiryLeaveWithoutSaving: 'Leave without saving',
+    inquiryStay: 'Stay on this form',
+    inquiryResumeGift: 'Continue your gift inquiry',
+    inquiryResumeProducts: 'Continue your product inquiry',
+    inquiryDiscard: 'Discard saved inquiry',
     loading: 'Finding thoughtful things…',
     loadingHint: 'Getting everything ready for you',
     requestQuote: 'Ask about this gift',
@@ -501,7 +564,9 @@ const copy = {
     chosenWithCare: 'Escolhido com carinho',
     madeForYou: <>feito<br />para si</>,
     heroEyebrow: 'Presentes personalizados para cada momento',
-    heroArtworkMessage: ['Pequenas', 'surpresas.', 'Grandes sorrisos.'],
+    heroArtworkMessages: [['Pequenas', 'surpresas.', 'Grandes sorrisos.'], ['Criem juntos.', 'Criem memórias.'], ['Grandes ideias.', 'Começam a brincar.']],
+    heroCarouselLabel: 'Imagens em destaque',
+    heroSlideLabel: (slide: number) => `Mostrar imagem ${slide} do destaque`,
     heroTitle: <>Mais do que presentes,<br />uma&nbsp;<span className="hero-title-highlight"><span>d</span><span>e</span><span>s</span><span>c</span><span>o</span><span>b</span><span>e</span><span>r</span><span>t</span><span>a</span></span><span className="hero-title-period">.</span></>,
     heroBody: 'Descubra produtos únicos, crie ideias de presentes personalizados e torne cada momento ainda mais especial.',
     heroCta: 'Começar a criar',
@@ -560,6 +625,14 @@ const copy = {
     empty: 'Estamos a preparar a coleção. Volte em breve.',
     catalogError: 'Não foi possível carregar o catálogo. Tente novamente dentro de alguns instantes.',
     catalogRetry: 'Tentar novamente',
+    inquiryLeaveTitle: 'Guardar o seu progresso?',
+    inquiryLeaveDescription: 'O seu pedido ainda não foi enviado. Guarde-o para continuar noutra página deste site. Será eliminado se atualizar a página ou sair do site.',
+    inquirySaveAndLeave: 'Guardar e continuar',
+    inquiryLeaveWithoutSaving: 'Sair sem guardar',
+    inquiryStay: 'Continuar neste formulário',
+    inquiryResumeGift: 'Continuar o seu pedido de presente',
+    inquiryResumeProducts: 'Continuar o seu pedido de produtos',
+    inquiryDiscard: 'Eliminar pedido guardado',
     loading: 'A encontrar presentes especiais…',
     loadingHint: 'A preparar tudo para si',
     requestQuote: 'Perguntar sobre este presente',
@@ -890,24 +963,101 @@ function CatalogErrorNotice({ message, retryLabel, onRetry }: {
   );
 }
 
+function InquiryExitDialog({ t, onSave, onDiscard, onStay }: {
+  t: typeof copy[Language];
+  onSave: () => void;
+  onDiscard: () => void;
+  onStay: () => void;
+}) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const stayButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    stayButtonRef.current?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onStay();
+        return;
+      }
+      trapModalFocus(event, dialogRef.current);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onStay]);
+
+  return (
+    <div className="inquiry-exit-backdrop">
+      <div className="inquiry-exit-dialog" ref={dialogRef} role="alertdialog" aria-modal="true" aria-labelledby="inquiry-exit-title" aria-describedby="inquiry-exit-description">
+        <h2 id="inquiry-exit-title">{t.inquiryLeaveTitle}</h2>
+        <p id="inquiry-exit-description">{t.inquiryLeaveDescription}</p>
+        <div className="inquiry-exit-actions">
+          <button className="button button-primary" type="button" onClick={onSave}>{t.inquirySaveAndLeave}</button>
+          <button className="button button-outline" type="button" onClick={onDiscard}>{t.inquiryLeaveWithoutSaving}</button>
+          <button ref={stayButtonRef} className="text-link" type="button" onClick={onStay}>{t.inquiryStay}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SavedInquiryControl({ progress, t, onResume, onDiscard }: {
+  progress: InquiryProgress;
+  t: typeof copy[Language];
+  onResume: () => void;
+  onDiscard: () => void;
+}) {
+  const label = progress.kind === 'gift-builder' ? t.inquiryResumeGift : t.inquiryResumeProducts;
+  return (
+    <div className="saved-inquiry-control">
+      <button className="saved-inquiry-resume" type="button" aria-label={label} title={label} onClick={onResume}>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M7.25 3.5h6.4l4.85 4.85v11.9a1.75 1.75 0 0 1-1.75 1.75h-9.5A1.75 1.75 0 0 1 5.5 20.25V5.25A1.75 1.75 0 0 1 7.25 3.5Z" />
+          <path d="M13.5 3.75v4.5h4.5M9 12h6M9 15.5h6" />
+          <path className="saved-inquiry-icon-accent" d="M9 18.5h3" />
+        </svg>
+      </button>
+      <button className="saved-inquiry-discard" type="button" aria-label={t.inquiryDiscard} title={t.inquiryDiscard} onClick={onDiscard}>×</button>
+    </div>
+  );
+}
+
 function App() {
   const [language, setLanguage] = useState<Language>(readLanguagePreference);
   const [theme, setTheme] = useState<Theme>(readThemePreference);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [currentUrl, setCurrentUrl] = useState(() => `${window.location.pathname}${window.location.search}${window.location.hash}`);
+  const [heroSlide, setHeroSlide] = useState(() => Math.floor(Math.random() * 3));
   const [assistantGiftDraft, setAssistantGiftDraft] = useState<AssistantGiftDraft | null>(null);
+  const activeInquiryProgressRef = useRef<InquiryProgress | null>(null);
+  const [savedInquiryProgress, setSavedInquiryProgress] = useState<InquiryProgress | null>(null);
+  const [restoreInquiryProgress, setRestoreInquiryProgress] = useState<InquiryProgress | null>(null);
+  const [pendingInquiryNavigation, setPendingInquiryNavigation] = useState<string | null>(null);
+  const historyIndexRef = useRef(0);
+  const suppressPopstateRef = useRef(false);
+  const pendingHistoryNavigationRef = useRef<{ url: string; index: number } | null>(null);
   const [catalog, setCatalog] = useState<CatalogResponse>({ items: [], collections: [] });
   const [catalogState, setCatalogState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [contact, setContact] = useState<{ email: string; whatsapp: string }>({ email: '', whatsapp: '' });
   const lastAnalyticsPathRef = useRef('');
+  const previousHeroPathRef = useRef<string | null>(null);
   const lastAnalyticsProductRef = useRef('');
   const detailImageRef = useRef<HTMLDivElement>(null);
   const [isImageFullscreen, setIsImageFullscreen] = useState(false);
   const [fullscreenError, setFullscreenError] = useState('');
   const clearAssistantGiftDraft = useCallback(() => setAssistantGiftDraft(null), []);
+  const updateInquiryProgress = useCallback((progress: InquiryProgress | null) => {
+    activeInquiryProgressRef.current = progress;
+  }, []);
   const t = copy[language];
   const currentLocation = new URL(currentUrl, window.location.origin);
   const path = currentLocation.pathname.replace(/\/+$/, '') || '/';
+  useEffect(() => {
+    if (path === '/' && previousHeroPathRef.current !== null && previousHeroPathRef.current !== '/') {
+      setHeroSlide((current) => (current + 1) % 3);
+    }
+    previousHeroPathRef.current = path;
+  }, [path]);
+
   const catalogRequestUrl = (() => {
     const params = new URLSearchParams();
     if (path === '/') {
@@ -961,28 +1111,110 @@ function App() {
     trackAnalyticsEvent('page_view', path, { language });
   }, [language, path]);
 
-  const navigateInternal = (url: string) => {
+  const navigateInternal = (url: string, skipInquiryPrompt = false) => {
     const destination = new URL(url, window.location.origin);
     if (destination.origin !== window.location.origin) return;
     const nextUrl = `${destination.pathname}${destination.search}${destination.hash}`;
+    const activeProgress = activeInquiryProgressRef.current;
+    const isLeavingInquiry = (path === '/gift-builder' && activeProgress?.kind === 'gift-builder') ||
+      (path === '/product-enquiry' && activeProgress?.kind === 'product-enquiry');
+    if (!skipInquiryPrompt && destination.pathname !== path && isLeavingInquiry && activeProgress && hasInquiryProgress(activeProgress)) {
+      setPendingInquiryNavigation(nextUrl);
+      return;
+    }
     if (nextUrl !== currentUrl) {
-      window.history.pushState(null, '', nextUrl);
+      historyIndexRef.current += 1;
+      window.history.pushState({ discoveryIndex: historyIndexRef.current }, '', nextUrl);
       setCurrentUrl(nextUrl);
     }
     setMobileMenuOpen(false);
     window.scrollTo(0, 0);
   };
 
+  const stayOnInquiry = useCallback(() => {
+    setPendingInquiryNavigation(null);
+  }, []);
+
+  const finishInquiryNavigation = (save: boolean) => {
+    if (!pendingInquiryNavigation) return;
+    const progress = activeInquiryProgressRef.current;
+    if (save && progress && hasInquiryProgress(progress)) {
+      setSavedInquiryProgress(progress);
+    } else {
+      setSavedInquiryProgress(null);
+    }
+    updateInquiryProgress(null);
+    const destination = pendingInquiryNavigation;
+    setPendingInquiryNavigation(null);
+    const historyNavigation = pendingHistoryNavigationRef.current;
+    if (historyNavigation) {
+      pendingHistoryNavigationRef.current = null;
+      suppressPopstateRef.current = true;
+      window.history.go(historyNavigation.index - historyIndexRef.current);
+    } else {
+      navigateInternal(destination, true);
+    }
+  };
+
+  const resumeSavedInquiry = () => {
+    if (!savedInquiryProgress) return;
+    const progress = savedInquiryProgress;
+    setSavedInquiryProgress(null);
+    setRestoreInquiryProgress(progress);
+    updateInquiryProgress(progress);
+    navigateInternal(progress.kind === 'gift-builder' ? '/gift-builder' : '/product-enquiry', true);
+  };
+
+  const finishRestoringInquiry = useCallback(() => {
+    setRestoreInquiryProgress(null);
+  }, []);
+
+  const discardSavedInquiry = () => {
+    setSavedInquiryProgress(null);
+  };
+
   useEffect(() => {
     const syncLocation = () => {
-      setCurrentUrl(`${window.location.pathname}${window.location.search}${window.location.hash}`);
+      const nextUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      const state = window.history.state as { discoveryIndex?: unknown } | null;
+      const nextHistoryIndex = typeof state?.discoveryIndex === 'number' ? state.discoveryIndex : null;
+      if (suppressPopstateRef.current) {
+        suppressPopstateRef.current = false;
+        if (nextHistoryIndex !== null) historyIndexRef.current = nextHistoryIndex;
+        setCurrentUrl(nextUrl);
+        setMobileMenuOpen(false);
+        window.scrollTo(0, 0);
+        return;
+      }
+
+      const destination = new URL(nextUrl, window.location.origin);
+      const activeProgress = activeInquiryProgressRef.current;
+      const isLeavingInquiry = (path === '/gift-builder' && activeProgress?.kind === 'gift-builder') ||
+        (path === '/product-enquiry' && activeProgress?.kind === 'product-enquiry');
+      if (nextHistoryIndex !== null && nextHistoryIndex !== historyIndexRef.current &&
+        destination.pathname !== path && isLeavingInquiry && activeProgress && hasInquiryProgress(activeProgress)) {
+        pendingHistoryNavigationRef.current = { url: nextUrl, index: nextHistoryIndex };
+        setPendingInquiryNavigation(nextUrl);
+        suppressPopstateRef.current = true;
+        window.history.go(historyIndexRef.current - nextHistoryIndex);
+        return;
+      }
+      if (nextHistoryIndex !== null) historyIndexRef.current = nextHistoryIndex;
+      setCurrentUrl(nextUrl);
       setMobileMenuOpen(false);
+      window.scrollTo(0, 0);
     };
     window.addEventListener('popstate', syncLocation);
     return () => window.removeEventListener('popstate', syncLocation);
-  }, []);
+  }, [path]);
 
   useLayoutEffect(() => {
+    const state = window.history.state as { discoveryIndex?: unknown } | null;
+    if (typeof state?.discoveryIndex === 'number') {
+      historyIndexRef.current = state.discoveryIndex;
+    } else {
+      window.history.replaceState({ discoveryIndex: historyIndexRef.current }, '');
+    }
     document.getElementById('startup-loader')?.remove();
   }, []);
 
@@ -1223,11 +1455,32 @@ function App() {
               <a className="button hero-browse-button" href="/shop">{t.heroBrowse}<span aria-hidden="true">↗</span></a>
             </div>
           </div>
-          <img className="hero-artwork" src="/discovery-box-adventure.png" alt="" aria-hidden="true" />
-          <p className="hero-artwork-message">
-            {t.heroArtworkMessage.map((line) => <span key={line}>{line}</span>)}
-            <span className="hero-artwork-heart" aria-hidden="true">♡</span>
-          </p>
+          {t.heroArtworkMessages.map((lines, index) => (
+            <Fragment key={index}>
+              <img
+                className={`hero-artwork${heroSlide === index ? ' hero-artwork-active' : ''}`}
+                src={['/discovery-box-adventure.png', '/friends-painting-figurine.webp', '/playful-animal-robot-workshop.webp'][index]}
+                alt=""
+                aria-hidden="true"
+              />
+              <p className={`hero-artwork-message${heroSlide === index ? ' hero-artwork-message-active' : ''}`} aria-hidden="true">
+                {lines.map((line) => <span key={line}>{line}</span>)}
+                {index === 0 && <span className="hero-artwork-heart" aria-hidden="true">♡</span>}
+              </p>
+            </Fragment>
+          ))}
+          <div className="hero-carousel-controls" role="group" aria-label={t.heroCarouselLabel}>
+            {t.heroArtworkMessages.map((_, index) => (
+              <button
+                key={index}
+                className="hero-carousel-dot"
+                type="button"
+                aria-label={t.heroSlideLabel(index + 1)}
+                aria-pressed={heroSlide === index}
+                onClick={() => setHeroSlide(index)}
+              />
+            ))}
+          </div>
         </section>
         <div className="trust-strip"><span>✦</span>{t.trusted}<span>✦</span></div>
         <section className="section section-intro">
@@ -1547,6 +1800,9 @@ function App() {
       productImage={productImage}
       imageStyle={imageStyle}
       retryCatalog={retryCatalog}
+      initialProgress={restoreInquiryProgress?.kind === 'product-enquiry' ? restoreInquiryProgress : null}
+      onProgressChange={updateInquiryProgress}
+      onProgressRestored={finishRestoringInquiry}
     />;
   } else if (path.startsWith('/product/')) {
     const productImages = selectedItem?.images?.filter(Boolean) || [];
@@ -1628,7 +1884,7 @@ function App() {
         ? <CatalogErrorNotice message={t.catalogError} retryLabel={t.catalogRetry} onRetry={retryCatalog} />
         : <p className="notice">{t.notFound}</p>}</section>;
   } else if (path === '/gift-builder') {
-    page = <GiftBuilder catalog={catalog} catalogState={catalogState} language={language} t={t} nameFor={nameFor} descriptionFor={descriptionFor} productImage={productImage} productImageStyle={productImageStyle} imageStyle={imageStyle} initialProduct={currentLocation.searchParams.get('product') || ''} assistantDraft={assistantGiftDraft} onAssistantDraftApplied={clearAssistantGiftDraft} refreshCatalog={refreshCatalog} retryCatalog={retryCatalog} />;
+    page = <GiftBuilder catalog={catalog} catalogState={catalogState} language={language} t={t} nameFor={nameFor} descriptionFor={descriptionFor} productImage={productImage} productImageStyle={productImageStyle} imageStyle={imageStyle} initialProduct={currentLocation.searchParams.get('product') || ''} assistantDraft={assistantGiftDraft} onAssistantDraftApplied={clearAssistantGiftDraft} refreshCatalog={refreshCatalog} retryCatalog={retryCatalog} initialProgress={restoreInquiryProgress?.kind === 'gift-builder' ? restoreInquiryProgress : null} onProgressChange={updateInquiryProgress} onProgressRestored={finishRestoringInquiry} />;
   } else if (path === '/corporate') {
     const businessCollections = catalog.collections.filter((collection) => collection.family === 'BUSINESS');
     page = (
@@ -1838,6 +2094,22 @@ function App() {
         navigateInternal('/gift-builder');
       }}
     />
+    {savedInquiryProgress && (
+      <SavedInquiryControl
+        progress={savedInquiryProgress}
+        t={t}
+        onResume={resumeSavedInquiry}
+        onDiscard={discardSavedInquiry}
+      />
+    )}
+    {pendingInquiryNavigation && (
+      <InquiryExitDialog
+        t={t}
+        onSave={() => finishInquiryNavigation(true)}
+        onDiscard={() => finishInquiryNavigation(false)}
+        onStay={stayOnInquiry}
+      />
+    )}
     </>
   );
 }
@@ -1943,7 +2215,7 @@ function CustomerReviews({ language, t }: { language: Language; t: typeof copy[L
 }
 
 function ProductEnquiry({
-  catalog, catalogState, initialProduct, language, t, nameFor, productImage, imageStyle, retryCatalog,
+  catalog, catalogState, initialProduct, language, t, nameFor, productImage, imageStyle, retryCatalog, initialProgress, onProgressChange, onProgressRestored,
 }: {
   catalog: CatalogResponse;
   catalogState: 'loading' | 'ready' | 'error';
@@ -1954,26 +2226,54 @@ function ProductEnquiry({
   productImage: (item: CatalogItem) => string;
   imageStyle: (item: CatalogItem, index: number) => CSSProperties;
   retryCatalog: () => void;
+  initialProgress: ProductEnquiryProgress | null;
+  onProgressChange: (progress: InquiryProgress | null) => void;
+  onProgressRestored: () => void;
 }) {
-  const [selectedIds, setSelectedIds] = useState<string[]>(initialProduct ? [initialProduct] : []);
-  const [quantities, setQuantities] = useState<Record<string, number>>({});
-  const [productToAdd, setProductToAdd] = useState('');
+  const [selectedIds, setSelectedIds] = useState<string[]>(() => initialProgress?.selectedIds ?? (initialProduct ? [initialProduct] : []));
+  const [quantities, setQuantities] = useState<Record<string, number>>(() => initialProgress?.quantities ?? {});
+  const [productToAdd, setProductToAdd] = useState(() => initialProgress?.productToAdd ?? '');
   const [productPickerOpen, setProductPickerOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [message, setMessage] = useState('');
-  const [consent, setConsent] = useState(false);
+  const [name, setName] = useState(() => initialProgress?.name ?? '');
+  const [email, setEmail] = useState(() => initialProgress?.email ?? '');
+  const [phone, setPhone] = useState(() => initialProgress?.phone ?? '');
+  const [message, setMessage] = useState(() => initialProgress?.message ?? '');
+  const [consent, setConsent] = useState(() => initialProgress?.consent ?? false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [sent, setSent] = useState(false);
   const productPickerRef = useRef<HTMLDivElement>(null);
   const productPickerTriggerRef = useRef<HTMLButtonElement>(null);
+  const didRestoreProgressRef = useRef(false);
   const selectedProducts = selectedIds
     .map((id) => catalog.items.find((item) => item.id === id))
     .filter((item): item is CatalogItem => Boolean(item));
   const availableProducts = catalog.items.filter((item) => !selectedIds.includes(item.id));
   const productToAddItem = availableProducts.find((item) => item.id === productToAdd);
+
+  useEffect(() => {
+    if (sent) {
+      onProgressChange(null);
+      return;
+    }
+    onProgressChange({
+      kind: 'product-enquiry',
+      selectedIds: [...selectedIds],
+      quantities: { ...quantities },
+      productToAdd,
+      name,
+      email,
+      phone,
+      message,
+      consent,
+    });
+  }, [sent, selectedIds, quantities, productToAdd, name, email, phone, message, consent, onProgressChange]);
+
+  useEffect(() => {
+    if (!initialProgress || didRestoreProgressRef.current) return;
+    didRestoreProgressRef.current = true;
+    onProgressRestored();
+  }, [initialProgress, onProgressRestored]);
 
   useEffect(() => {
     if (!productPickerOpen) return;
@@ -2175,7 +2475,7 @@ function ProductEnquiry({
 }
 
 function GiftBuilder({
-  catalog, catalogState, language, t, nameFor, descriptionFor, productImage, productImageStyle, imageStyle, initialProduct, assistantDraft, onAssistantDraftApplied, refreshCatalog, retryCatalog,
+  catalog, catalogState, language, t, nameFor, descriptionFor, productImage, productImageStyle, imageStyle, initialProduct, assistantDraft, onAssistantDraftApplied, refreshCatalog, retryCatalog, initialProgress, onProgressChange, onProgressRestored,
 }: {
   catalog: CatalogResponse;
   catalogState: 'loading' | 'ready' | 'error';
@@ -2191,27 +2491,30 @@ function GiftBuilder({
   onAssistantDraftApplied: () => void;
   refreshCatalog: () => Promise<CatalogResponse>;
   retryCatalog: () => void;
+  initialProgress: GiftBuilderProgress | null;
+  onProgressChange: (progress: InquiryProgress | null) => void;
+  onProgressRestored: () => void;
 }) {
-  const [step, setStep] = useState(1);
-  const [selected, setSelected] = useState<string[]>(initialProduct ? [initialProduct] : []);
-  const [occasion, setOccasion] = useState('');
-  const [occasionDetails, setOccasionDetails] = useState('');
-  const [recipient, setRecipient] = useState('');
-  const [recipientDetails, setRecipientDetails] = useState('');
-  const [budget, setBudget] = useState('');
-  const [preferences, setPreferences] = useState('');
-  const [cardMessage, setCardMessage] = useState('');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [preferredContact, setPreferredContact] = useState<'email' | 'phone' | 'whatsapp'>('email');
-  const [address, setAddress] = useState<EnquiryAddress>(() => ({ ...emptyEnquiryAddress }));
-  const [visibleOptionalFields, setVisibleOptionalFields] = useState<Record<string, boolean>>({});
-  const [deliveryAddressVisible, setDeliveryAddressVisible] = useState(false);
-  const [addressEntryMode, setAddressEntryMode] = useState<'manual' | 'map' | null>(null);
+  const [step, setStep] = useState(() => initialProgress?.step ?? 1);
+  const [selected, setSelected] = useState<string[]>(() => initialProgress?.selected ?? (initialProduct ? [initialProduct] : []));
+  const [occasion, setOccasion] = useState(() => initialProgress?.occasion ?? '');
+  const [occasionDetails, setOccasionDetails] = useState(() => initialProgress?.occasionDetails ?? '');
+  const [recipient, setRecipient] = useState(() => initialProgress?.recipient ?? '');
+  const [recipientDetails, setRecipientDetails] = useState(() => initialProgress?.recipientDetails ?? '');
+  const [budget, setBudget] = useState(() => initialProgress?.budget ?? '');
+  const [preferences, setPreferences] = useState(() => initialProgress?.preferences ?? '');
+  const [cardMessage, setCardMessage] = useState(() => initialProgress?.cardMessage ?? '');
+  const [name, setName] = useState(() => initialProgress?.name ?? '');
+  const [email, setEmail] = useState(() => initialProgress?.email ?? '');
+  const [phone, setPhone] = useState(() => initialProgress?.phone ?? '');
+  const [preferredContact, setPreferredContact] = useState<'email' | 'phone' | 'whatsapp'>(() => initialProgress?.preferredContact ?? 'email');
+  const [address, setAddress] = useState<EnquiryAddress>(() => initialProgress ? { ...initialProgress.address } : { ...emptyEnquiryAddress });
+  const [visibleOptionalFields, setVisibleOptionalFields] = useState<Record<string, boolean>>(() => initialProgress?.visibleOptionalFields ?? {});
+  const [deliveryAddressVisible, setDeliveryAddressVisible] = useState(() => initialProgress?.deliveryAddressVisible ?? false);
+  const [addressEntryMode, setAddressEntryMode] = useState<'manual' | 'map' | null>(() => initialProgress?.addressEntryMode ?? null);
   const [mapAddressEditing, setMapAddressEditing] = useState(false);
   const [mapPickerOpen, setMapPickerOpen] = useState(false);
-  const [consent, setConsent] = useState(false);
+  const [consent, setConsent] = useState(() => initialProgress?.consent ?? false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [sent, setSent] = useState(false);
@@ -2223,11 +2526,50 @@ function GiftBuilder({
   const productDetailsDialogRef = useRef<HTMLElement>(null);
   const productDetailsCloseRef = useRef<HTMLButtonElement>(null);
   const productDetailsTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const [showAllProducts, setShowAllProducts] = useState(false);
+  const [showAllProducts, setShowAllProducts] = useState(() => initialProgress?.showAllProducts ?? initialProgress?.step === 2);
   const [recommendationError, setRecommendationError] = useState('');
   const recommendationRequestRef = useRef(0);
   const appliedAssistantDraftRef = useRef<AssistantGiftDraft | null>(null);
+  const didRestoreProgressRef = useRef(false);
   const lastTrackedStepRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (sent) {
+      onProgressChange(null);
+      return;
+    }
+    onProgressChange({
+      kind: 'gift-builder',
+      step,
+      selected: [...selected],
+      occasion,
+      occasionDetails,
+      recipient,
+      recipientDetails,
+      budget,
+      preferences,
+      cardMessage,
+      name,
+      email,
+      phone,
+      preferredContact,
+      address: { ...address },
+      visibleOptionalFields: { ...visibleOptionalFields },
+      deliveryAddressVisible,
+      addressEntryMode,
+      consent,
+      showAllProducts,
+    });
+  }, [
+    sent, step, selected, occasion, occasionDetails, recipient, recipientDetails, budget,
+    preferences, cardMessage, name, email, phone, preferredContact, address,
+    visibleOptionalFields, deliveryAddressVisible, addressEntryMode, consent,
+    showAllProducts, onProgressChange,
+  ]);
+  useEffect(() => {
+    if (!initialProgress || didRestoreProgressRef.current) return;
+    didRestoreProgressRef.current = true;
+    onProgressRestored();
+  }, [initialProgress, onProgressRestored]);
   useEffect(() => {
     if (lastTrackedStepRef.current === step) return;
     lastTrackedStepRef.current = step;
@@ -2592,6 +2934,21 @@ function GiftBuilder({
                       setPreferredContact(method);
                       if (method !== 'email') setOptionalFieldVisible('phone', true);
                     }} />
+                    <svg className="preferred-contact-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none">
+                      {method === 'email' ? (
+                        <>
+                          <rect x="3" y="5" width="18" height="14" rx="2" />
+                          <path d="m4 7 8 6 8-6" />
+                        </>
+                      ) : method === 'phone' ? (
+                        <path d="M7.2 3.5h2.4l1.2 4.2-1.7 1.6a15 15 0 0 0 5.6 5.6l1.6-1.7 4.2 1.2v2.4a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 5.2 5.7a2 2 0 0 1 2-2.2Z" />
+                      ) : (
+                        <>
+                          <path d="M20.5 11.7a8.4 8.4 0 0 1-12.4 7.4L3.5 20l.9-4.4a8.4 8.4 0 1 1 16.1-3.9Z" />
+                          <path d="M8.3 8.2c.2-.5.5-.5.8-.5h.5c.2 0 .4.1.5.4l.8 1.9c.1.2 0 .4-.1.6l-.6.7c-.2.2-.2.4-.1.6.6 1 1.4 1.8 2.4 2.3.2.1.4.1.6-.1l.8-.9c.2-.2.4-.2.6-.1l1.8.9c.3.1.4.3.4.5 0 .3-.1 1-.7 1.4-.5.4-1.2.7-2 .5-1-.2-2.2-.8-3.5-1.9-1.1-1-2-2.2-2.3-3.1-.4-.9-.2-1.8.1-2.4Z" />
+                        </>
+                      )}
+                    </svg>
                     <span>{label}</span>
                   </label>
                 ))}

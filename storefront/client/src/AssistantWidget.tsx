@@ -38,6 +38,7 @@ const labels = {
     placeholder: 'Ask about gifts or products…',
     send: 'Send message',
     sending: 'Thinking…',
+    retry: 'Retry',
     notice: 'AI responses can be inaccurate. Please don’t share sensitive personal information.',
     unavailable: 'The assistant is temporarily unavailable. Please try again later.',
     confirmTitle: 'End this conversation?',
@@ -61,6 +62,7 @@ const labels = {
     placeholder: 'Pergunte sobre presentes ou produtos…',
     send: 'Enviar mensagem',
     sending: 'A pensar…',
+    retry: 'Tentar novamente',
     notice: 'As respostas da IA podem conter erros. Não partilhe informações pessoais sensíveis.',
     unavailable: 'O assistente está temporariamente indisponível. Tente novamente mais tarde.',
     confirmTitle: 'Terminar esta conversa?',
@@ -208,6 +210,7 @@ export default function AssistantWidget({ language, onNavigate, onOpen, onApplyG
   const [draft, setDraft] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
+  const [failedMessages, setFailedMessages] = useState<Message[] | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -232,15 +235,18 @@ export default function AssistantWidget({ language, onNavigate, onOpen, onApplyG
     }
   }, [messages, pending, error]);
 
-  const sendContent = async (content: string) => {
-    if (!content || pending) return;
+  const sendContent = async (content: string, retryMessages?: Message[]) => {
+    if ((!content && !retryMessages) || pending) return;
 
-    const nextMessages = [
+    const nextMessages = retryMessages ?? [
       ...messages.map((message) => ({ ...message, formAction: 'none' as const })),
       { role: 'user' as const, content },
     ].slice(-20);
-    setMessages(nextMessages);
-    setDraft('');
+    if (!retryMessages) {
+      setMessages(nextMessages);
+      setDraft('');
+      setFailedMessages(null);
+    }
     setError('');
     setPending(true);
     const controller = new AbortController();
@@ -279,10 +285,12 @@ export default function AssistantWidget({ language, onNavigate, onOpen, onApplyG
       const assistantMessage: Message = { role: 'assistant', content: result.answer, formAction, formDraft };
       if (formAction === 'apply' && formDraft) onApplyGiftDraft(formDraft);
       setMessages((current) => [...current, assistantMessage].slice(-20));
+      setFailedMessages(null);
     } catch (cause) {
       if (controller.signal.aborted) return;
       const message = cause instanceof Error ? cause.message : '';
       setError(message && message !== 'Failed to fetch' ? message : copy.unavailable);
+      setFailedMessages(nextMessages);
     } finally {
       if (activeRequestRef.current === controller) {
         activeRequestRef.current = null;
@@ -295,6 +303,12 @@ export default function AssistantWidget({ language, onNavigate, onOpen, onApplyG
   const sendMessage = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     void sendContent(draft.trim());
+  };
+
+  const retryFailedMessage = () => {
+    if (!failedMessages) return;
+    const lastUserMessage = [...failedMessages].reverse().find((message) => message.role === 'user');
+    if (lastUserMessage) void sendContent(lastUserMessage.content, failedMessages);
   };
 
   const acceptGiftDraft = (index: number, giftDraft: AssistantGiftDraft) => {
@@ -314,6 +328,7 @@ export default function AssistantWidget({ language, onNavigate, onOpen, onApplyG
     setMessages([]);
     setDraft('');
     setError('');
+    setFailedMessages(null);
     setPending(false);
     setConfirmClose(false);
     setOpen(false);
@@ -354,7 +369,12 @@ export default function AssistantWidget({ language, onNavigate, onOpen, onApplyG
                 : <p className="assistant-message assistant-message-user" key={`${index}-${message.role}`}>{message.content}</p>
             ))}
             {pending && <p className="assistant-message assistant-message-bot assistant-thinking">{copy.sending}</p>}
-            {error && <p className="assistant-error" role="alert">{error}</p>}
+            {error && (
+              <div className="assistant-error" role="alert">
+                <p>{error}</p>
+                {failedMessages && <button type="button" onClick={retryFailedMessage}>{copy.retry}</button>}
+              </div>
+            )}
           </div>
           <p className="assistant-notice">{copy.notice}</p>
           <form className="assistant-form" onSubmit={sendMessage}>
