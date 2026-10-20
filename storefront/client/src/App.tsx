@@ -4,6 +4,7 @@ import type { AssistantGiftDraft } from './assistantTypes';
 import type { MapAddress } from './MapAddressPicker';
 import { trackAnalyticsEvent } from './analytics';
 import { getCanonicalSearchParams, getPageMetadata } from '../../pageMetadata';
+import { trapModalFocus } from './focusTrap';
 
 const MapAddressPicker = lazy(() => import('./MapAddressPicker'));
 
@@ -78,6 +79,10 @@ type Collection = {
 type CatalogResponse = {
   items: CatalogItem[];
   collections: Collection[];
+  total?: number;
+  page?: number;
+  pageSize?: number;
+  familyCounts?: Partial<Record<CatalogItem['family'], number>>;
 };
 type GiftRecommendation = {
   productId: string;
@@ -175,6 +180,7 @@ const copy = {
     business: 'BUSINESS',
     empty: 'Our collection is being prepared. Please check back soon.',
     catalogError: 'We could not load the catalogue right now. Please try again shortly.',
+    catalogRetry: 'Try again',
     loading: 'Finding thoughtful things…',
     loadingHint: 'Getting everything ready for you',
     requestQuote: 'Ask about this gift',
@@ -553,6 +559,7 @@ const copy = {
     business: 'EMPRESAS',
     empty: 'Estamos a preparar a coleção. Volte em breve.',
     catalogError: 'Não foi possível carregar o catálogo. Tente novamente dentro de alguns instantes.',
+    catalogRetry: 'Tentar novamente',
     loading: 'A encontrar presentes especiais…',
     loadingHint: 'A preparar tudo para si',
     requestQuote: 'Perguntar sobre este presente',
@@ -870,6 +877,19 @@ function readThemePreference(): Theme {
   }
 }
 
+function CatalogErrorNotice({ message, retryLabel, onRetry }: {
+  message: string;
+  retryLabel: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div className="catalog-error notice notice-error" role="alert">
+      <p>{message}</p>
+      <button className="button button-outline" type="button" onClick={onRetry}>{retryLabel}</button>
+    </div>
+  );
+}
+
 function App() {
   const [language, setLanguage] = useState<Language>(readLanguagePreference);
   const [theme, setTheme] = useState<Theme>(readThemePreference);
@@ -888,6 +908,26 @@ function App() {
   const t = copy[language];
   const currentLocation = new URL(currentUrl, window.location.origin);
   const path = currentLocation.pathname.replace(/\/+$/, '') || '/';
+  const catalogRequestUrl = (() => {
+    const params = new URLSearchParams();
+    if (path === '/') {
+      params.set('view', 'overview');
+    } else if (path === '/corporate') {
+      params.set('view', 'collections');
+    } else if (path === '/shop' || path.startsWith('/shop/')) {
+      params.set('view', 'shop');
+      for (const key of ['family', 'collection', 'category', 'q', 'sort', 'page']) {
+        const value = currentLocation.searchParams.get(key);
+        if (value) params.set(key, value);
+      }
+    } else if (path.startsWith('/product/')) {
+      params.set('view', 'product');
+      params.set('id', decodeURIComponent(path.slice('/product/'.length)));
+    } else if (path === '/gift-builder' || path === '/product-enquiry') {
+      params.set('view', 'all');
+    }
+    return params.size ? `/api/catalog?${params.toString()}` : '';
+  })();
 
   useEffect(() => {
     const syncFullscreenState = () => {
@@ -1002,22 +1042,46 @@ function App() {
     );
   }, [theme]);
 
+  const catalogRequestIdRef = useRef(0);
   const refreshCatalog = useCallback(async () => {
-    const response = await fetch('/api/catalog', { cache: 'no-store' });
-    if (!response.ok) throw new Error('Catalogue refresh failed');
-    const nextCatalog = await response.json() as CatalogResponse;
-    setCatalog(nextCatalog);
-    setCatalogState('ready');
-    return nextCatalog;
-  }, []);
+    const requestId = ++catalogRequestIdRef.current;
+    if (!catalogRequestUrl) {
+      const emptyCatalog: CatalogResponse = { items: [], collections: [], total: 0 };
+      setCatalog(emptyCatalog);
+      setCatalogState('ready');
+      return emptyCatalog;
+    }
+    try {
+      const response = await fetch(catalogRequestUrl, { cache: 'no-store' });
+      if (!response.ok) throw new Error('Catalogue refresh failed');
+      const nextCatalog = await response.json() as CatalogResponse;
+      if (requestId === catalogRequestIdRef.current) {
+        setCatalog(nextCatalog);
+        setCatalogState('ready');
+      }
+      return nextCatalog;
+    } catch (error) {
+      if (requestId === catalogRequestIdRef.current) setCatalogState('error');
+      throw error;
+    }
+  }, [catalogRequestUrl]);
+
+  const retryCatalog = useCallback(() => {
+    setCatalogState('loading');
+    void refreshCatalog().catch((error) => {
+      console.error('Could not retry catalogue load', error);
+    });
+  }, [refreshCatalog]);
 
   useEffect(() => {
-    void refreshCatalog().catch(() => setCatalogState('error'));
+    setCatalog({ items: [], collections: [], total: 0 });
+    setCatalogState(catalogRequestUrl ? 'loading' : 'ready');
+    void refreshCatalog().catch(() => {});
     fetch('/api/public-config').then((response) => {
       if (!response.ok) throw new Error('Contact configuration request failed');
       return response.json() as Promise<{ email: string; whatsapp: string }>;
     }).then(setContact).catch(() => setContact({ email: '', whatsapp: '' }));
-  }, [refreshCatalog]);
+  }, [catalogRequestUrl, refreshCatalog]);
 
   const itemById = useMemo(() => new Map(catalog.items.map((item) => [item.id, item])), [catalog.items]);
   const selectedItemId = path.startsWith('/product/') ? decodeURIComponent(path.slice('/product/'.length)) : '';
@@ -1142,7 +1206,7 @@ function App() {
   const catalogNotice = catalogState === 'loading'
     ? <p className="notice">{t.loading}</p>
     : catalogState === 'error'
-      ? <p className="notice notice-error">{t.catalogError}</p>
+      ? <CatalogErrorNotice message={t.catalogError} retryLabel={t.catalogRetry} onRetry={retryCatalog} />
       : null;
 
   let page;
@@ -1182,7 +1246,7 @@ function App() {
           {catalogState === 'ready' && (
             <div className="collection-grid">
               {worlds.map(({ family, featuredItem }, index) => {
-                const giftCount = catalog.items.filter((item) => item.family === family).length;
+                const giftCount = catalog.familyCounts?.[family] ?? catalog.items.filter((item) => item.family === family).length;
                 const countLabel = language === 'en'
                   ? giftCount === 1 ? 'active gift to explore' : 'active gifts to explore'
                   : giftCount === 1 ? 'presente ativo para explorar' : 'presentes ativos para explorar';
@@ -1278,12 +1342,12 @@ function App() {
       return sortOrder === 'price-low' ? validLeftPrice - validRightPrice : validRightPrice - validLeftPrice;
     });
     const productsPerPage = 6;
-    const pageCount = Math.max(1, Math.ceil(sortedVisible.length / productsPerPage));
+    const pageCount = Math.max(1, Math.ceil((catalog.total ?? sortedVisible.length) / productsPerPage));
     const requestedPage = Number(currentLocation.searchParams.get('page') || 1);
     const currentPage = Number.isSafeInteger(requestedPage) && requestedPage > 0
       ? Math.min(requestedPage, pageCount)
       : 1;
-    const pageItems = sortedVisible.slice((currentPage - 1) * productsPerPage, currentPage * productsPerPage);
+    const pageItems = sortedVisible;
     const shopFilterUrl = (updates: Record<string, string | null>) => {
       const params = new URLSearchParams(currentLocation.searchParams);
       params.delete('page');
@@ -1451,7 +1515,7 @@ function App() {
           </aside>
           <div className="shop-results">
             {catalogNotice}
-            {catalogState === 'ready' && (sortedVisible.length ? (
+            {catalogState === 'ready' && ((catalog.total ?? sortedVisible.length) ? (
               <>
                 {renderCards(pageItems)}
                 {pageCount > 1 && (
@@ -1482,6 +1546,7 @@ function App() {
       nameFor={nameFor}
       productImage={productImage}
       imageStyle={imageStyle}
+      retryCatalog={retryCatalog}
     />;
   } else if (path.startsWith('/product/')) {
     const productImages = selectedItem?.images?.filter(Boolean) || [];
@@ -1559,9 +1624,11 @@ function App() {
         </div>
       </section>
     ) : catalogState === 'loading' ? <section className="section page-section">{catalogNotice}</section>
-      : <section className="section page-section"><p className="notice">{catalogState === 'error' ? t.catalogError : t.notFound}</p></section>;
+      : <section className="section page-section">{catalogState === 'error'
+        ? <CatalogErrorNotice message={t.catalogError} retryLabel={t.catalogRetry} onRetry={retryCatalog} />
+        : <p className="notice">{t.notFound}</p>}</section>;
   } else if (path === '/gift-builder') {
-    page = <GiftBuilder catalog={catalog} catalogState={catalogState} language={language} t={t} nameFor={nameFor} descriptionFor={descriptionFor} productImage={productImage} productImageStyle={productImageStyle} imageStyle={imageStyle} initialProduct={currentLocation.searchParams.get('product') || ''} assistantDraft={assistantGiftDraft} onAssistantDraftApplied={clearAssistantGiftDraft} refreshCatalog={refreshCatalog} />;
+    page = <GiftBuilder catalog={catalog} catalogState={catalogState} language={language} t={t} nameFor={nameFor} descriptionFor={descriptionFor} productImage={productImage} productImageStyle={productImageStyle} imageStyle={imageStyle} initialProduct={currentLocation.searchParams.get('product') || ''} assistantDraft={assistantGiftDraft} onAssistantDraftApplied={clearAssistantGiftDraft} refreshCatalog={refreshCatalog} retryCatalog={retryCatalog} />;
   } else if (path === '/corporate') {
     const businessCollections = catalog.collections.filter((collection) => collection.family === 'BUSINESS');
     page = (
@@ -1876,7 +1943,7 @@ function CustomerReviews({ language, t }: { language: Language; t: typeof copy[L
 }
 
 function ProductEnquiry({
-  catalog, catalogState, initialProduct, language, t, nameFor, productImage, imageStyle,
+  catalog, catalogState, initialProduct, language, t, nameFor, productImage, imageStyle, retryCatalog,
 }: {
   catalog: CatalogResponse;
   catalogState: 'loading' | 'ready' | 'error';
@@ -1886,6 +1953,7 @@ function ProductEnquiry({
   nameFor: (item: CatalogItem) => string;
   productImage: (item: CatalogItem) => string;
   imageStyle: (item: CatalogItem, index: number) => CSSProperties;
+  retryCatalog: () => void;
 }) {
   const [selectedIds, setSelectedIds] = useState<string[]>(initialProduct ? [initialProduct] : []);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
@@ -2039,7 +2107,7 @@ function ProductEnquiry({
                 </button>
               </article>
             ))}
-            {catalogState === 'error' && <p className="notice notice-error" role="alert">{t.catalogError}</p>}
+            {catalogState === 'error' && <CatalogErrorNotice message={t.catalogError} retryLabel={t.catalogRetry} onRetry={retryCatalog} />}
             <div className="product-enquiry-add">
               <label>
                 <span>{t.productEnquiryAddProduct}</span>
@@ -2107,7 +2175,7 @@ function ProductEnquiry({
 }
 
 function GiftBuilder({
-  catalog, catalogState, language, t, nameFor, descriptionFor, productImage, productImageStyle, imageStyle, initialProduct, assistantDraft, onAssistantDraftApplied, refreshCatalog,
+  catalog, catalogState, language, t, nameFor, descriptionFor, productImage, productImageStyle, imageStyle, initialProduct, assistantDraft, onAssistantDraftApplied, refreshCatalog, retryCatalog,
 }: {
   catalog: CatalogResponse;
   catalogState: 'loading' | 'ready' | 'error';
@@ -2122,6 +2190,7 @@ function GiftBuilder({
   assistantDraft: AssistantGiftDraft | null;
   onAssistantDraftApplied: () => void;
   refreshCatalog: () => Promise<CatalogResponse>;
+  retryCatalog: () => void;
 }) {
   const [step, setStep] = useState(1);
   const [selected, setSelected] = useState<string[]>(initialProduct ? [initialProduct] : []);
@@ -2151,6 +2220,9 @@ function GiftBuilder({
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [productDetails, setProductDetails] = useState<{ item: CatalogItem; recommendation: GiftRecommendation | null } | null>(null);
   const [productDetailsImageIndex, setProductDetailsImageIndex] = useState(0);
+  const productDetailsDialogRef = useRef<HTMLElement>(null);
+  const productDetailsCloseRef = useRef<HTMLButtonElement>(null);
+  const productDetailsTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [showAllProducts, setShowAllProducts] = useState(false);
   const [recommendationError, setRecommendationError] = useState('');
   const recommendationRequestRef = useRef(0);
@@ -2164,19 +2236,26 @@ function GiftBuilder({
   const productDetailsImages = productDetails?.item.images?.flatMap((src, index) => src ? [{ src, index }] : []) ?? [];
   const activeProductDetailsImagePosition = productDetailsImages.findIndex(({ index }) => index === productDetailsImageIndex);
   const activeProductDetailsImage = productDetailsImages[activeProductDetailsImagePosition];
-  const openProductDetails = (item: CatalogItem, recommendation: GiftRecommendation | null) => {
+  const openProductDetails = (item: CatalogItem, recommendation: GiftRecommendation | null, trigger: HTMLButtonElement) => {
     const images = item.images?.flatMap((src, index) => src ? [{ src, index }] : []) ?? [];
     const primaryImage = images.find(({ index }) => index === item.primary_image_index) ?? images[0];
     setProductDetailsImageIndex(primaryImage?.index ?? 0);
+    productDetailsTriggerRef.current = trigger;
     setProductDetails({ item, recommendation });
   };
   useEffect(() => {
-    if (!productDetails) return;
+    if (!productDetails) {
+      productDetailsTriggerRef.current?.focus();
+      productDetailsTriggerRef.current = null;
+      return;
+    }
+    productDetailsCloseRef.current?.focus();
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setProductDetails(null);
         return;
       }
+      trapModalFocus(event, productDetailsDialogRef.current);
       if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && productDetailsImages.length > 1) {
         event.preventDefault();
         setProductDetailsImageIndex((currentIndex) => {
@@ -2189,7 +2268,7 @@ function GiftBuilder({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [productDetails]);
+  }, [productDetails, productDetailsImages.length]);
   const selectedProducts = catalog.items.filter((item) => selected.includes(item.id));
   const selectedNames = selectedProducts.map(nameFor);
   const corporateEventOption = language === 'en' ? 'Corporate event' : 'Evento empresarial';
@@ -2232,7 +2311,17 @@ function GiftBuilder({
       {visibleOptionalFields[id] && <div id={`gift-builder-${id}`}>{field}</div>}
     </div>
   );
+  const mapPickerTriggerRef = useRef<HTMLElement | null>(null);
   const closeMapPicker = useCallback(() => setMapPickerOpen(false), []);
+  const openMapPicker = (trigger: HTMLElement) => {
+    mapPickerTriggerRef.current = trigger;
+    setMapPickerOpen(true);
+  };
+  useEffect(() => {
+    if (mapPickerOpen || !mapPickerTriggerRef.current) return;
+    mapPickerTriggerRef.current.focus();
+    mapPickerTriggerRef.current = null;
+  }, [mapPickerOpen]);
   const updateAddressField = (field: keyof EnquiryAddress, value: string) => {
     setAddress((current) => {
       const updated = { ...current, [field]: value };
@@ -2286,15 +2375,6 @@ function GiftBuilder({
   const toggleProduct = (id: string) => setSelected((items) =>
     items.includes(id) ? items.filter((item) => item !== id) : items.length < 5 ? [...items, id] : items,
   );
-
-  useEffect(() => {
-    if (!productDetails) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setProductDetails(null);
-    };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [productDetails]);
 
   const advanceStep = () => {
     setError('');
@@ -2448,7 +2528,7 @@ function GiftBuilder({
               </div>
             )}
             {catalogState === 'loading' && <p className="notice">{t.loading}</p>}
-            {catalogState === 'error' && <p className="notice notice-error">{t.catalogError}</p>}
+            {catalogState === 'error' && <CatalogErrorNotice message={t.catalogError} retryLabel={t.catalogRetry} onRetry={retryCatalog} />}
             {catalogState === 'ready' && !catalog.items.length && <p className="notice">{t.empty}</p>}
             {catalogState === 'ready' && catalog.items.length > 0 && !showAllProducts &&
               !recommendationsLoading && !recommendationError && recommendations?.length === 0 &&
@@ -2463,7 +2543,7 @@ function GiftBuilder({
                   </label>
                   <div className="choice-card-actions">
                     {recommendation && <span className="match-score" aria-label={`${t.matchScore}: ${recommendation.matchScore}%`}>{recommendation.matchScore}% {t.matchScore}</span>}
-                    <button className="text-link" type="button" onClick={() => openProductDetails(item, recommendation)}>{t.moreDetails}</button>
+                    <button className="text-link" type="button" onClick={(event) => openProductDetails(item, recommendation, event.currentTarget)}>{t.moreDetails}</button>
                   </div>
                 </article>
               ))}
@@ -2547,10 +2627,10 @@ function GiftBuilder({
                       <span>{t.addressEnterManually}</span>
                     </label>
                     <label className={`address-entry-option${addressEntryMode === 'map' ? ' address-entry-selected' : ''}`}>
-                      <input type="radio" name="address-entry-method" value="map" checked={addressEntryMode === 'map'} onChange={() => {
+                      <input type="radio" name="address-entry-method" value="map" checked={addressEntryMode === 'map'} onChange={(event) => {
                         setAddressEntryMode('map');
                         setMapAddressEditing(false);
-                        setMapPickerOpen(true);
+                        openMapPicker(event.currentTarget as HTMLElement);
                       }} />
                       <span>{t.addressUseMap}</span>
                     </label>
@@ -2561,7 +2641,7 @@ function GiftBuilder({
                   <>
                     <p className="map-privacy-note">{t.mapOptIn}</p>
                     {!hasSelectedMapAddress
-                      ? <button className="button button-outline map-open-button" type="button" onClick={() => setMapPickerOpen(true)}>{t.chooseAddressOnMap}</button>
+                      ? <button className="button button-outline map-open-button" type="button" onClick={(event) => openMapPicker(event.currentTarget)}>{t.chooseAddressOnMap}</button>
                       : <section className="selected-map-address" aria-label={t.deliveryAddress}>
                         <ul>
                           {addressSummaryFields.length > 0
@@ -2573,7 +2653,7 @@ function GiftBuilder({
                           <button className="button button-outline" type="button" onClick={() => setMapAddressEditing((editing) => !editing)}>
                             {mapAddressEditing ? t.addressDoneEditing : t.addressEditDetails}
                           </button>
-                          <button className="text-link" type="button" onClick={() => setMapPickerOpen(true)}>{t.editAddressOnMap}</button>
+                          <button className="text-link" type="button" onClick={(event) => openMapPicker(event.currentTarget)}>{t.editAddressOnMap}</button>
                         </div>
                         {mapAddressEditing && addressFields}
                       </section>}
@@ -2618,8 +2698,8 @@ function GiftBuilder({
       {productDetails && <div className="product-modal-backdrop" onMouseDown={(event) => {
         if (event.target === event.currentTarget) setProductDetails(null);
       }}>
-        <section className="product-modal" role="dialog" aria-modal="true" aria-labelledby="gift-product-details-title">
-          <button className="product-modal-close" type="button" aria-label={t.closeDetails} onClick={() => setProductDetails(null)}>×</button>
+        <section ref={productDetailsDialogRef} className="product-modal" role="dialog" aria-modal="true" aria-labelledby="gift-product-details-title" tabIndex={-1}>
+          <button ref={productDetailsCloseRef} className="product-modal-close" type="button" aria-label={t.closeDetails} onClick={() => setProductDetails(null)}>×</button>
           {activeProductDetailsImage
             ? <div className="product-modal-gallery">
               <div className="product-modal-gallery-frame">

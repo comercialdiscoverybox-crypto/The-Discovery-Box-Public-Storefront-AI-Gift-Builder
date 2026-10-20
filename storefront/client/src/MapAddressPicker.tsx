@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { trapModalFocus } from './focusTrap';
 
 export type MapAddress = {
   placeName: string;
@@ -91,6 +92,7 @@ function formatAddressDetails(address: Pick<MapAddress, 'road' | 'houseNumber' |
 
 export default function MapAddressPicker({ language, onUseAddress, onClose, initialLocation }: MapAddressPickerProps) {
   const mapElementRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const lookupTimerRef = useRef<number | null>(null);
@@ -247,18 +249,19 @@ export default function MapAddressPicker({ language, onUseAddress, onClose, init
 
   useEffect(() => {
     closeButtonRef.current?.focus();
-    const closeOnEscape = (event: KeyboardEvent) => {
+    const handleDialogKeydown = (event: KeyboardEvent) => {
+      trapModalFocus(event, dialogRef.current);
       if (event.key === 'Escape') onClose();
     };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
+    window.addEventListener('keydown', handleDialogKeydown);
+    return () => window.removeEventListener('keydown', handleDialogKeydown);
   }, [onClose]);
 
   return (
     <div className="address-map-backdrop" onMouseDown={(event) => {
       if (event.target === event.currentTarget) onClose();
     }}>
-      <section className="address-map-dialog" role="dialog" aria-modal="true" aria-labelledby="address-map-title">
+      <section ref={dialogRef} className="address-map-dialog" role="dialog" aria-modal="true" aria-labelledby="address-map-title" tabIndex={-1}>
         <header className="address-map-header">
           <h2 id="address-map-title">{copy.title}</h2>
           <button ref={closeButtonRef} className="address-map-close" type="button" aria-label={copy.close} onClick={onClose}>×</button>

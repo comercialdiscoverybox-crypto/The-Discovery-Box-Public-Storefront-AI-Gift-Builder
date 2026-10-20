@@ -42,7 +42,10 @@ The free Render plan is for preview. Review the draft privacy and terms pages, c
 ```sh
 npm run lint
 npm test
+npm run test:browser
 npm run build:storefront
 ```
+
+The browser suite starts a local storefront server and tests route-specific catalogue loading, responsive overflow, form validation, dialog keyboard focus, and serious or critical axe accessibility violations. Install Chromium once with `npx playwright install chromium`.
 
 The original product and deployment brief is retained in [`Instructions`](./Instructions).

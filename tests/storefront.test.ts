@@ -262,6 +262,76 @@ test('public catalogue API retrieves products beyond the first database page', a
   }
 });
 
+test('shop catalogue API filters and paginates results in Supabase', async () => {
+  const originalFetch = globalThis.fetch;
+  let itemRequestUrl = '';
+  process.env.SUPABASE_URL = 'https://catalogue-shop-test.supabase.co';
+  process.env.SUPABASE_PUBLISHABLE_KEY = 'test-public-key';
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url.includes('/rest/v1/public_catalog_collections')) {
+      return new Response(JSON.stringify([{
+        id: 'playful-finds',
+        family: 'PLAY',
+        name_en: 'PLAYFUL FINDS',
+        name_pt: 'DESCOBERTAS DIVERTIDAS',
+        tagline_en: null,
+        tagline_pt: null,
+        image_url: '',
+        image_crop: null,
+      }]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (url.includes('/rest/v1/public_catalog_items')) {
+      itemRequestUrl = url;
+      return new Response(JSON.stringify([{
+        id: 'GIFT-007',
+        family: 'PLAY',
+        collection: 'PLAYFUL FINDS',
+        category: 'Toys & Creative Figures',
+        name_en: 'Creative Puzzle',
+        name_pt: 'Puzzle Criativo',
+        description_en: 'A thoughtful puzzle.',
+        description_pt: 'Um puzzle especial.',
+        price_mzn: 1200,
+        images: [],
+        image_crops: [],
+        primary_image_index: 0,
+      }]), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Range': '6-6/7',
+        },
+      });
+    }
+    return originalFetch(input, init);
+  };
+
+  try {
+    const response = await originalFetch(
+      `${baseUrl}/api/catalog?view=shop&family=PLAY&collection=playful-finds&category=Toys%20%26%20Creative%20Figures&q=puzzle&page=2&sort=price-low`,
+    );
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.total, 7);
+    assert.equal(result.page, 2);
+    assert.equal(result.pageSize, 6);
+    assert.equal(result.items[0].id, 'GIFT-007');
+    const query = new URL(itemRequestUrl).searchParams;
+    assert.equal(query.get('family'), 'eq.PLAY');
+    assert.equal(query.get('category'), 'eq.Toys & Creative Figures');
+    assert.match(query.get('collection') || '', /playful-finds/);
+    assert.match(query.get('or') || '', /name_en\.ilike/);
+    assert.match(query.get('order') || '', /price_mzn\.asc/);
+    assert.equal(query.get('offset'), '6');
+    assert.equal(query.get('limit'), '6');
+  } finally {
+    globalThis.fetch = originalFetch;
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_PUBLISHABLE_KEY;
+  }
+});
+
 test('gift recommendations report unavailable services instead of returning success-shaped results', async () => {
   const response = await fetch(`${baseUrl}/api/gift-recommendations`, {
     method: 'POST',

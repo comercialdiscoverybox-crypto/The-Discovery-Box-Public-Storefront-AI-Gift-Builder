@@ -1070,77 +1070,171 @@ app.post('/api/assistant/chat', rateLimit(8, 15 * 60 * 1000), async (req, res) =
   }
 });
 
-app.get('/api/catalog', async (_req, res) => {
+app.get('/api/catalog', async (req, res) => {
   const supabase = getPublicSupabase();
   if (!supabase) {
     res.status(503).json({ error: 'The public catalogue is not configured.' });
     return;
   }
-  const apiStartedAt = Date.now();
-  logApiCall('Supabase', 'public_catalog_query', 'started');
-  const [items, collections] = await Promise.all([
-    (async () => {
-      const rows: Array<{
-        id: string;
-        family: 'PLAY' | 'HOME' | 'BUSINESS';
-        collection: string;
-        category: string | null;
-        name_en: string;
-        name_pt: string;
-        description_en: string;
-        description_pt: string;
-        price_mzn: number | string | null;
-        images: string[] | null;
-        image_crops: Array<{ x: number; y: number; zoom: number }> | null;
-        primary_image_index: number | null;
-      }> = [];
-      const pageSize = 500;
-      for (let offset = 0; ; offset += pageSize) {
-        const page = await supabase.from('public_catalog_items')
-          .select('id,family,collection,category,name_en,name_pt,description_en,description_pt,price_mzn,images,image_crops,primary_image_index')
-          .order('id')
-          .range(offset, offset + pageSize - 1);
-        if (page.error) return { data: null, error: page.error };
-        rows.push(...(page.data || []));
-        if ((page.data || []).length < pageSize) break;
-      }
-      return { data: rows, error: null };
-    })(),
-    supabase.from('public_catalog_collections').select('id,family,name_en,name_pt,tagline_en,tagline_pt,image_url,image_crop').order('id'),
-  ]);
-  if (items.error || collections.error) {
-    logApiCall('Supabase', 'public_catalog_query', 'failed', {
-      durationMs: Date.now() - apiStartedAt,
-      itemsCode: items.error?.code || 'ok',
-      collectionsCode: collections.error?.code || 'ok',
-    });
-    console.error('Public catalogue query failed', {
-      items: items.error?.code || null,
-      collections: collections.error?.code || null,
-    });
-    res.status(502).json({ error: 'The public catalogue is temporarily unavailable.' });
+  const view = typeof req.query.view === 'string' ? req.query.view : 'all';
+  if (!['all', 'overview', 'collections', 'product', 'shop'].includes(view)) {
+    res.status(400).json({ error: 'The requested catalogue view is not supported.' });
     return;
   }
-  logApiCall('Supabase', 'public_catalog_query', 'succeeded', {
-    durationMs: Date.now() - apiStartedAt,
-    itemCount: items.data?.length || 0,
-    collectionCount: collections.data?.length || 0,
-  });
-  const storageBaseUrl = process.env.SUPABASE_URL?.trim();
-  const resolveImage = (imageUrl: string) => storageBaseUrl
-    ? toPublicCatalogImageUrl(imageUrl, storageBaseUrl)
-    : imageUrl;
-  res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
-  res.json({
-    items: (items.data || []).map((item) => ({
-      ...item,
-      images: item.images?.map(resolveImage) || [],
-    })),
-    collections: (collections.data || []).map((collection) => ({
-      ...collection,
-      image_url: collection.image_url ? resolveImage(collection.image_url) : '',
-    })),
-  });
+  const families = ['PLAY', 'HOME', 'BUSINESS'] as const;
+  const family = typeof req.query.family === 'string' && families.includes(req.query.family as typeof families[number])
+    ? req.query.family as typeof families[number]
+    : null;
+  const category = typeof req.query.category === 'string' ? req.query.category.trim().slice(0, 120) : '';
+  const collectionId = typeof req.query.collection === 'string' ? req.query.collection.trim().slice(0, 120) : '';
+  const productId = typeof req.query.id === 'string' ? req.query.id.trim().slice(0, 120) : '';
+  const search = typeof req.query.q === 'string'
+    ? req.query.q.trim().replace(/[^\p{L}\p{N}\s'-]/gu, ' ').replace(/\s+/g, ' ').slice(0, 80).trim()
+    : '';
+  const sort = req.query.sort === 'price-low' || req.query.sort === 'price-high' ? req.query.sort : 'featured';
+  const requestedPage = typeof req.query.page === 'string' && /^\d{1,7}$/.test(req.query.page)
+    ? Math.max(1, Number(req.query.page))
+    : 1;
+  const pageSize = 6;
+  const catalogColumns = 'id,family,collection,category,name_en,name_pt,description_en,description_pt,price_mzn,images,image_crops,primary_image_index';
+  const apiStartedAt = Date.now();
+  logApiCall('Supabase', 'public_catalog_query', 'started');
+  try {
+    const collectionsPromise = supabase.from('public_catalog_collections')
+      .select('id,family,name_en,name_pt,tagline_en,tagline_pt,image_url,image_crop')
+      .order('id');
+    const collectionsResult = await collectionsPromise;
+    if (collectionsResult.error) throw collectionsResult.error;
+    const collections = collectionsResult.data || [];
+    let items: Array<{
+      id: string;
+      family: 'PLAY' | 'HOME' | 'BUSINESS';
+      collection: string;
+      category: string | null;
+      name_en: string;
+      name_pt: string;
+      description_en: string;
+      description_pt: string;
+      price_mzn: number | string | null;
+      images: string[] | null;
+      image_crops: Array<{ x: number; y: number; zoom: number }> | null;
+      primary_image_index: number | null;
+    }> = [];
+    let total = 0;
+    let familyCounts: Record<string, number> | undefined;
+    let resultPage: number | undefined;
+    let resultPageSize: number | undefined;
+
+    if (view === 'overview') {
+      const overview = await Promise.all(families.map(async (itemFamily) => {
+        const result = await supabase.from('public_catalog_items')
+          .select(catalogColumns, { count: 'exact' })
+          .eq('family', itemFamily)
+          .order('id')
+          .limit(1);
+        if (result.error) throw result.error;
+        return { family: itemFamily, item: result.data?.[0], count: result.count || 0 };
+      }));
+      items = overview.flatMap(({ item }) => item ? [item] : []);
+      familyCounts = Object.fromEntries(overview.map(({ family: itemFamily, count }) => [itemFamily, count]));
+      total = overview.reduce((count, entry) => count + entry.count, 0);
+    } else if (view === 'collections') {
+      total = 0;
+    } else if (view === 'product') {
+      if (productId) {
+        const result = await supabase.from('public_catalog_items')
+          .select(catalogColumns)
+          .eq('id', productId)
+          .limit(1);
+        if (result.error) throw result.error;
+        items = result.data || [];
+        total = items.length;
+      }
+    } else if (view === 'shop') {
+      const selectedCollection = collectionId
+        ? collections.find((entry) => entry.id === collectionId)
+        : undefined;
+      const collectionValues = selectedCollection
+        ? [...new Set([selectedCollection.id, selectedCollection.name_en, selectedCollection.name_pt])]
+        : [];
+      if (!collectionId || selectedCollection) {
+        const buildQuery = () => {
+          let query = supabase.from('public_catalog_items')
+            .select(catalogColumns, { count: 'exact' });
+          if (family) query = query.eq('family', family);
+          if (category) query = query.eq('category', category);
+          if (selectedCollection) query = query.in('collection', collectionValues);
+          if (search) {
+            const pattern = `"%${search}%"`;
+            query = query.or([
+              `id.ilike.${pattern}`,
+              `name_en.ilike.${pattern}`,
+              `name_pt.ilike.${pattern}`,
+              `description_en.ilike.${pattern}`,
+              `description_pt.ilike.${pattern}`,
+            ].join(','));
+          }
+          if (sort === 'price-low' || sort === 'price-high') {
+            query = query.order('price_mzn', { ascending: sort === 'price-low', nullsFirst: false });
+          }
+          return query.order('id');
+        };
+        const result = await buildQuery().range((requestedPage - 1) * pageSize, requestedPage * pageSize - 1);
+        if (result.error) throw result.error;
+        items = result.data || [];
+        total = result.count || 0;
+      }
+      resultPage = requestedPage;
+      resultPageSize = pageSize;
+    } else {
+      const rows: typeof items = [];
+      const batchSize = 500;
+      for (let offset = 0; ; offset += batchSize) {
+        const result = await supabase.from('public_catalog_items')
+          .select(catalogColumns)
+          .order('id')
+          .range(offset, offset + batchSize - 1);
+        if (result.error) throw result.error;
+        rows.push(...(result.data || []));
+        if ((result.data || []).length < batchSize) break;
+      }
+      items = rows;
+      total = rows.length;
+    }
+
+    logApiCall('Supabase', 'public_catalog_query', 'succeeded', {
+      durationMs: Date.now() - apiStartedAt,
+      itemCount: items.length,
+      collectionCount: collections.length,
+    });
+    const storageBaseUrl = process.env.SUPABASE_URL?.trim();
+    const resolveImage = (imageUrl: string) => storageBaseUrl
+      ? toPublicCatalogImageUrl(imageUrl, storageBaseUrl)
+      : imageUrl;
+    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+    res.json({
+      items: items.map((item) => ({
+        ...item,
+        images: item.images?.map(resolveImage) || [],
+      })),
+      collections: collections.map((collection) => ({
+        ...collection,
+        image_url: collection.image_url ? resolveImage(collection.image_url) : '',
+      })),
+      total,
+      ...(familyCounts ? { familyCounts } : {}),
+      ...(resultPage !== undefined ? { page: resultPage, pageSize: resultPageSize } : {}),
+    });
+  } catch (error) {
+    logApiCall('Supabase', 'public_catalog_query', 'failed', {
+      durationMs: Date.now() - apiStartedAt,
+      reason: 'query',
+    });
+    console.error('Public catalogue query failed', {
+      reason: error instanceof Error ? error.message : 'unknown',
+    });
+    res.status(502).json({ error: 'The public catalogue is temporarily unavailable.' });
+  }
 });
 
 app.post('/api/gift-recommendations', rateLimit(8, 15 * 60 * 1000), async (req, res) => {
